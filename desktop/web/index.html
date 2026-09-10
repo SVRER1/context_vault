@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Context Vault</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section id="welcome" class="welcome-screen">
+    <div class="welcome-card">
+      <div class="brand-mark">CV</div>
+      <p class="eyebrow">LOCAL KNOWLEDGE WORKSPACE</p>
+      <h1>Context Vault</h1>
+      <p class="lead">Turn a folder into a grounded, directory-scoped knowledge workspace.</p>
+      <button id="select-folder" class="primary large">Select vault folder</button>
+      <div class="recent-block">
+        <div class="section-label">Recent vaults</div>
+        <div id="recent-vaults" class="recent-list"></div>
+      </div>
+      <div id="welcome-status" class="muted"></div>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="brand-mark small">CV</div><div><strong>Context Vault</strong><span>Evidence workspace</span></div></div>
+      <div class="vault-card">
+        <div id="vault-name" class="vault-name">No vault</div>
+        <div id="vault-path" class="vault-path"></div>
+        <div id="vault-stats" class="vault-stats"></div>
+      </div>
+      <button id="prepare-vault" class="primary full">Scan and prepare</button>
+      <div id="prepare-status" class="prepare-status"></div>
+      <nav id="navigation" class="navigation">
+        <button data-page="chat" class="nav-item active">Chat &amp; Studio</button>
+        <button data-page="search" class="nav-item">Search</button>
+        <button data-page="organise" class="nav-item">Organise</button>
+        <button data-page="duplicates" class="nav-item">Duplicates</button>
+        <button data-page="generate" class="nav-item">Generate</button>
+        <button data-page="audit" class="nav-item">Audit</button>
+        <button data-page="settings" class="nav-item">Settings</button>
+      </nav>
+      <button id="change-vault" class="secondary full">Change vault</button>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div><span class="eyebrow">SOURCE OF TRUTH</span><strong id="page-title">Chat &amp; Studio</strong></div>
+        <div class="topbar-actions">
+          <label class="scope-label" for="scope-select">Evidence scope</label>
+          <select id="scope-select"><option value="">Entire vault</option></select>
+          <span id="llm-status" class="status-pill">Checking model</span>
+        </div>
+      </header>
+
+      <section id="page-chat" class="page active">
+        <div class="page-heading"><div><p class="eyebrow">GROUNDED WORK</p><h2>Ask your vault</h2><p>Answers, actions, OCR, search, and artifacts stay inside the selected directory.</p></div></div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="quick-actions">
+          <button data-query="organise files by extension">Organise by type</button>
+          <button data-query="peek into directory">Peek files</button>
+          <button data-query="find duplicate files">Find duplicates</button>
+          <button data-query="generate a chart of my data">Plot a chart</button>
+          <button data-query="generate a study guide as PDF">Study guide PDF</button>
+        </div>
+        <form id="chat-form" class="composer"><input id="chat-input" autocomplete="off" placeholder="Ask a question or request an action..."><button class="primary" type="submit">Send</button></form>
+      </section>
+
+      <section id="page-search" class="page">
+        <div class="page-heading"><div><p class="eyebrow">LIVE FILESYSTEM SEARCH</p><h2>Find source files</h2><p>Searches the active directory scope without requiring a prior index.</p></div></div>
+        <form id="search-form" class="inline-form"><input id="search-input" placeholder="Search filenames, paths, and bounded previews"><button class="primary" type="submit">Search</button></form>
+        <div id="search-status" class="muted"></div><div id="search-results" class="result-list"></div>
+      </section>
+
+      <section id="page-organise" class="page">
+        <div class="page-heading"><div><p class="eyebrow">SAFE FILE OPERATIONS</p><h2>Organise files</h2><p>Preview proposed moves before applying hash-verified operations.</p></div></div>
+        <div class="form-card grid-form">
+          <label>Division method<select id="organisation-grouping"><option value="file-type">By file type</option><option value="file-family">By file family</option><option value="subject">By content subject</option><option value="date-month">By year and month</option><option value="date-year">By year</option><option value="size">By file size</option><option value="custom">Custom parameter</option></select></label>
+          <label id="custom-rule-wrap" class="hidden">Custom criteria<input id="custom-rule" placeholder="Divide by course: CS101, Math, Physics"></label>
+          <label>Maximum folder depth<input id="organisation-depth" type="number" min="1" max="4" value="2"></label>
+          <label class="check-label"><input id="preserve-existing" type="checkbox" checked> Preserve existing subdirectories</label>
+          <button id="preview-organisation" class="primary">Preview organisation plan</button>
+        </div>
+        <div id="organisation-status" class="muted"></div><div id="organisation-summary" class="summary-card hidden"></div><div id="organisation-plan" class="table-wrap"></div>
+        <button id="apply-organisation" class="success hidden">Apply plan</button>
+      </section>
+
+      <section id="page-duplicates" class="page">
+        <div class="page-heading"><div><p class="eyebrow">INTEGRITY CHECKS</p><h2>Duplicates and versions</h2><p>Detect exact SHA-256 duplicates and probable filename revisions in scope.</p></div><button id="detect-duplicates" class="primary">Run detection</button></div>
+        <div id="duplicates-status" class="muted"></div><div id="duplicates-content" class="split-tables"></div>
+      </section>
+
+      <section id="page-generate" class="page">
+        <div class="page-heading"><div><p class="eyebrow">EVIDENCE-GROUNDED OUTPUT</p><h2>Generate an artifact</h2><p>Use the same scoped evidence pipeline to create a knowledge artifact or chart.</p></div></div>
+        <div class="form-card grid-form">
+          <label>Artifact type<select id="asset-type"><option value="summary">Summary</option><option value="study-guide">Study guide</option><option value="revision-notes">Revision notes</option><option value="flashcards">Flashcards</option><option value="quiz">Quiz</option><option value="timeline">Timeline</option><option value="vault-report">Vault report</option></select></label>
+          <label>Topic<input id="asset-topic" placeholder="Optional topic focus"></label>
+          <label>Count<input id="asset-count" type="number" min="1" max="100" value="10"></label>
+          <button id="generate-asset" class="primary">Generate artifact</button>
+        </div>
+        <div class="form-card grid-form chart-form">
+          <label>Dataset<select id="dataset-select"><option value="">Scan datasets</option></select></label>
+          <label>Chart type<select id="chart-type"><option value="bar">Bar chart</option><option value="line">Line chart</option><option value="scatter">Scatter plot</option><option value="pie">Pie chart</option></select></label>
+          <label>Chart title<input id="chart-title" placeholder="Optional title"></label>
+          <button id="generate-chart" class="secondary">Generate chart</button>
+        </div>
+        <div id="generation-status" class="muted"></div><div id="generation-output" class="output-card"></div>
+      </section>
+
+      <section id="page-audit" class="page">
+        <div class="page-heading"><div><p class="eyebrow">REVERSIBLE OPERATIONS</p><h2>Audit log</h2><p>Review file operations and reverse completed moves when needed.</p></div><div class="button-row"><button id="undo-last-batch" class="secondary">Undo last batch</button><button id="refresh-audit" class="primary">Refresh</button></div></div>
+        <div id="audit-status" class="muted"></div><div id="audit-table" class="table-wrap"></div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="page-heading"><div><p class="eyebrow">LOCAL MODEL</p><h2>Settings</h2><p>Configure Ollama and retrieval budgets without changing the backend services.</p></div></div>
+        <div class="form-card settings-form">
+          <label>Ollama server URL<input id="setting-url"></label>
+          <label>Model<input id="setting-model"></label>
+          <label>Temperature<input id="setting-temperature" type="number" min="0" max="1" step="0.05"></label>
+          <label>Candidate files<input id="setting-candidates" type="number" min="1" max="50"></label>
+          <label>Generated output folder<input id="setting-generated"></label>
+          <div class="button-row"><button id="refresh-models" class="secondary">Refresh models</button><button id="test-ollama" class="secondary">Test connection</button><button id="save-settings" class="primary">Save settings</button></div>
+          <div id="settings-status" class="muted"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

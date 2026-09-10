@@ -1,0 +1,1 @@
+pywebview>=5.4,typer[all]>=0.9,rich>=13.0,pydantic>=2.0,pymupdf>=1.23,python-docx>=1.0,python-pptx>=0.6,openpyxl>=3.1,requests>=2.31,Pillow>=10.0,pytesseract>=0.3.10,matplotlib>=3.7,reportlab>=4.0

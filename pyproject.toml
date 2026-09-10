@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "context-vault"
+version = "0.1.0"
+description = "Local-first agentic file intelligence workspace"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    "pywebview>=5.4",
+    "typer[all]>=0.9",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "pymupdf>=1.23",
+    "python-docx>=1.0",
+    "python-pptx>=0.6",
+    "openpyxl>=3.1",
+    "requests>=2.31",
+    "Pillow>=10.0",
+    "pytesseract>=0.3.10",
+    "matplotlib>=3.7",
+    "reportlab>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+cvault = "cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["contextvault*", "cli*", "desktop*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

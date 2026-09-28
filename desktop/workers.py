@@ -1,58 +1,39 @@
-from threading import Thread
+from PySide6.QtCore import QThread, Signal
+import traceback
+from contextvault.services.service_container import ServiceContainer
+from contextvault.retrieval.search_models import SearchRequest
 
+class BaseWorker(QThread):
+    progress = Signal(int, int, str)
+    finished = Signal(object)
+    error = Signal(str)
 
-class BaseWorker:
-    def __init__(self, service_container, *args, **kwargs):
+    def __init__(self, service_container: ServiceContainer, *args, **kwargs):
+        super().__init__()
         self.service_container = service_container
         self.args = args
         self.kwargs = kwargs
-        self.progress_callbacks = []
-        self.finished_callbacks = []
-        self.error_callbacks = []
-        self.thread = None
-
-    def on_progress(self, callback):
-        self.progress_callbacks.append(callback)
-        return self
-
-    def on_finished(self, callback):
-        self.finished_callbacks.append(callback)
-        return self
-
-    def on_error(self, callback):
-        self.error_callbacks.append(callback)
-        return self
-
-    def emit_progress(self, current, total, message):
-        for callback in self.progress_callbacks:
-            callback(current, total, message)
-
-    def start(self):
-        self.thread = Thread(target=self.run, daemon=True)
-        self.thread.start()
-        return self
 
     def run(self):
         try:
-            result = self.do_work()
-            for callback in self.finished_callbacks:
-                callback(result)
-        except Exception as exc:
-            for callback in self.error_callbacks:
-                callback(str(exc))
+            with self.service_container.database_lock:
+                result = self.do_work()
+            self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(f"{str(e)}")
 
     def do_work(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
 class ScanWorker(BaseWorker):
     def do_work(self):
-        self.emit_progress(0, 100, "Starting vault scan...")
+        self.progress.emit(0, 100, "Starting vault scan...")
         vault = self.service_container.vault
         if not vault:
             raise ValueError("No vault open")
         result = self.service_container.vault_service.scan_vault(vault, self.service_container.vault_db)
-        self.emit_progress(100, 100, f"Scan complete: {len(result)} files.")
+        self.progress.emit(100, 100, f"Scan complete: {len(result)} files.")
         return result
 
 
@@ -61,45 +42,51 @@ class IndexWorker(BaseWorker):
         vault = self.service_container.vault
         if not vault:
             raise ValueError("No vault open")
+            
+        def on_prog(cur, tot, msg=""):
+            pct = int((cur / tot) * 100) if tot > 0 else 0
+            self.progress.emit(pct, 100, msg or "Indexing...")
 
-        def on_progress(current, total, message=""):
-            self.emit_progress(current, total, message or "Preparing vault...")
-
-        result = self.service_container.vault_service.index_vault(
-            vault,
-            self.service_container.vault_db,
-            progress_callback=on_progress,
-            ocr_client=self.service_container.llm_client,
-        )
-        self.emit_progress(100, 100, "Vault preparation complete.")
+        result = self.service_container.index_service.reconcile(progress_callback=on_prog)
+        self.progress.emit(100, 100, "Indexing complete.")
         return result
 
 
 class RAGWorker(BaseWorker):
     def do_work(self):
         query = self.kwargs.get("query")
+        if not query:
+            raise ValueError("Query is required")
         vault = self.service_container.vault
-        if not query or not vault:
-            raise ValueError("A query and an open vault are required")
-        self.emit_progress(0, 100, "Retrieving and thinking...")
+        if not vault:
+            raise ValueError("No vault open")
+        
+        self.progress.emit(0, 100, "Retrieving and thinking...")
         result = self.service_container.rag_service.ask(
             query, vault.vault_id, subfolder=self.kwargs.get("subfolder")
         )
-        self.emit_progress(100, 100, "Done.")
+        self.progress.emit(100, 100, "Done.")
         return result
 
 
 class SearchWorker(BaseWorker):
     def do_work(self):
         query = self.kwargs.get("query")
+        rule = self.kwargs.get("rule")
+        if not query and rule is None:
+            raise ValueError("Enter search text or add a rule condition")
         vault = self.service_container.vault
-        if not query or not vault:
-            raise ValueError("A query and an open vault are required")
-        self.emit_progress(0, 100, "Searching...")
-        result = self.service_container.rag_service.search(
-            query, vault.vault_id, subfolder=self.kwargs.get("subfolder")
-        )
-        self.emit_progress(100, 100, f"Found {len(result)} results.")
+        if not vault:
+            raise ValueError("No vault open")
+            
+        self.progress.emit(0, 100, "Searching...")
+        result = self.service_container.search_service.search(SearchRequest(
+            vault_id=vault.vault_id,
+            query=query or None,
+            rule=rule,
+            source_scope=self.kwargs.get("subfolder"),
+        ))
+        self.progress.emit(100, 100, f"Found {len(result.hits)} results.")
         return result
 
 
@@ -108,58 +95,68 @@ class OrganiseWorker(BaseWorker):
         rules = self.kwargs.get("rules")
         if not rules:
             raise ValueError("Rules are required")
-        self.emit_progress(0, 100, "Generating organisation plan...")
-        result = self.service_container.organisation_service.preview(
+            
+        self.progress.emit(0, 100, "Generating deterministic organisation plan...")
+        plan = self.service_container.organisation_service.preview_plan(
             rules, subfolder=self.kwargs.get("subfolder")
         )
-        self.emit_progress(100, 100, "Plan ready.")
-        return result
+        self.progress.emit(100, 100, "Plan ready.")
+        return plan
 
 
 class ApplyOrganisationWorker(BaseWorker):
     def do_work(self):
-        plan = self.kwargs.get("plan")
-        if not plan:
-            raise ValueError("Plan is required")
-        self.emit_progress(0, 100, "Applying organisation plan...")
-        result = self.service_container.organisation_service.apply(plan)
-        self.emit_progress(100, 100, f"Applied {len(result)} operations.")
+        plan_id = self.kwargs.get("plan_id")
+        digest = self.kwargs.get("digest")
+        if not plan_id or not digest:
+            raise ValueError("A persisted plan ID and digest are required")
+            
+        self.progress.emit(0, 100, "Applying organisation plan...")
+        result = self.service_container.organisation_service.commit_plan(plan_id, digest, approved=True)
+        self.progress.emit(100, 100, f"Operation batch status: {result.status}.")
         return result
 
 
 class DuplicateWorker(BaseWorker):
     def do_work(self):
-        self.emit_progress(0, 100, "Detecting duplicates...")
-        result = self.service_container.organisation_service.detect_duplicates(
+        self.progress.emit(0, 100, "Detecting duplicates...")
+        exact, versions = self.service_container.organisation_service.detect_duplicates(
             subfolder=self.kwargs.get("subfolder")
         )
-        self.emit_progress(100, 100, "Detection complete.")
-        return {"exact": result[0], "versions": result[1]}
+        self.progress.emit(100, 100, "Detection complete.")
+        return {"exact": exact, "versions": versions}
 
 
 class GenerateWorker(BaseWorker):
     def do_work(self):
-        self.emit_progress(0, 100, "Generating artifact...")
+        asset_type = self.kwargs.get("asset_type", "summary")
+        topic = self.kwargs.get("topic")
+        count = self.kwargs.get("count")
+        filename = self.kwargs.get("filename")
+        
+        self.progress.emit(0, 100, f"Generating {asset_type}...")
         result = self.service_container.generation_service.generate(
-            asset_type=self.kwargs.get("asset_type", "summary"),
-            topic=self.kwargs.get("topic"),
-            count=self.kwargs.get("count"),
-            filename=self.kwargs.get("filename"),
+            asset_type=asset_type,
+            topic=topic,
+            count=count,
+            filename=filename,
             subfolder=self.kwargs.get("subfolder"),
         )
-        self.emit_progress(100, 100, "Generation complete.")
+        self.progress.emit(100, 100, "Generation complete.")
         return result
 
 
 class AgentWorker(BaseWorker):
     def do_work(self):
         query = self.kwargs.get("query")
+        subfolder = self.kwargs.get("subfolder")
+        if not query:
+            raise ValueError("Query is required")
         vault = self.service_container.vault
-        if not query or not vault:
-            raise ValueError("A query and an open vault are required")
-        self.emit_progress(0, 100, "Processing query...")
-        result = self.service_container.orchestrator.handle_query(
-            query, vault, subfolder=self.kwargs.get("subfolder")
-        )
-        self.emit_progress(100, 100, "Done.")
+        if not vault:
+            raise ValueError("No vault open")
+
+        self.progress.emit(0, 100, "Processing query...")
+        result = self.service_container.orchestrator.handle_query(query, vault, subfolder=subfolder)
+        self.progress.emit(100, 100, "Done.")
         return result

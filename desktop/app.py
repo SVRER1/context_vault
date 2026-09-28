@@ -1,19 +1,21 @@
 import os
-import subprocess
-import sys
-import threading
-import uuid
-from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
-from pathlib import Path
-
-import requests
-
-from contextvault.core.models import OrganisationPlan
-from contextvault.organisation.rules import OrganisationRules
-from contextvault.retrieval.filesystem_policy import is_ignored_source_path
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QStackedWidget, QListWidget, QLabel, QPushButton, 
+    QStatusBar, QFrame, QListWidgetItem, QProgressBar, QMessageBox
+)
+from PySide6.QtCore import Qt, QSize
 from contextvault.services.service_container import ServiceContainer
-from contextvault.tools.charts import ChartGenerator
+from desktop.workers import IndexWorker
+
+
+from desktop.pages.welcome_page import WelcomePage
+from desktop.pages.chat_page import ChatPage
+from desktop.pages.search_page import SearchPage
+from desktop.pages.organise_page import OrganisePage
+from desktop.pages.duplicates_page import DuplicatesPage
+from desktop.pages.audit_page import AuditPage
+from desktop.pages.settings_page import SettingsPage
 
 
 class AppContext:
@@ -23,300 +25,299 @@ class AppContext:
         self.active_subfolder = None
 
 
-class DesktopAPI:
-    def __init__(self, project_root):
-        self.project_root = Path(project_root).resolve()
-        self.context = AppContext()
-        self.window = None
-        self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gitpost-ui")
-        self.jobs = {}
-        self.lock = threading.RLock()
-
-    def attach_window(self, window):
-        self.window = window
-
-    def _json(self, value):
-        if value is None or isinstance(value, (str, int, float, bool)):
-            return value
-        if isinstance(value, (datetime, date)):
-            return value.isoformat()
-        if isinstance(value, Path):
-            return str(value)
-        if hasattr(value, "model_dump"):
-            return self._json(value.model_dump())
-        if isinstance(value, dict):
-            return {str(key): self._json(item) for key, item in value.items()}
-        if isinstance(value, (list, tuple, set)):
-            return [self._json(item) for item in value]
-        if hasattr(value, "__dict__"):
-            return self._json(vars(value))
-        return str(value)
-
-    def _vault(self):
-        vault = self.context.service_container.vault
-        if not vault:
-            raise ValueError("No vault is open")
-        return vault
-
-    def _recent(self):
-        try:
-            return [self._json(value) for value in self.context.service_container.vault_service.list_vaults()]
-        except Exception:
-            return []
-
-    def _scopes(self):
-        vault = self.context.service_container.vault
-        if not vault:
-            return []
-        generated = self.context.service_container.config.generated_output_folder
-        scopes = set()
-        for root, directories, files in os.walk(vault.root_path):
-            root_path = Path(root)
-            directories[:] = [
-                name for name in directories
-                if not is_ignored_source_path(root_path / name, generated)
-            ]
-            if root_path != vault.root_path:
-                scopes.add(str(root_path.relative_to(vault.root_path)).replace("\\", "/"))
-        return sorted(scopes)
-
-    def _state(self):
-        vault = self.context.service_container.vault
-        if not vault:
-            return {
-                "open": False,
-                "recent": self._recent(),
-                "model": self.context.service_container.config.ollama_model,
-                "llm_online": False,
-            }
-        status = self.context.service_container.vault_service.get_vault_status(vault)
-        llm = self.context.service_container.llm_client
-        return {
-            "open": True,
-            "vault": {
-                "id": vault.vault_id,
-                "name": vault.display_name,
-                "path": str(vault.root_path),
-            },
-            "scope": self.context.active_subfolder,
-            "scopes": self._scopes(),
-            "files": status.get("file_count", 0),
-            "cached_passages": status.get("chunk_count", 0),
-            "model": self.context.service_container.config.ollama_model,
-            "llm_online": bool(llm and llm.is_available()),
-        }
-
-    def boot(self):
-        return self._state()
-
-    def recent_vaults(self):
-        return self._recent()
-
-    def select_folder(self):
-        if not self.window:
-            return None
-        import webview
-        selected = self.window.create_file_dialog(webview.FOLDER_DIALOG, allow_multiple=False)
-        return selected[0] if selected else None
-
-    def set_scope(self, scope):
-        vault = self._vault()
-        scope = (scope or "").strip().strip("/\\") or None
-        if scope:
-            vault.scope_root(scope)
-        self.context.active_subfolder = scope
-        return self._state()
-
-    def open_path(self, relative_path):
-        vault = self._vault()
-        target = vault.absolute_path(relative_path)
-        if sys.platform.startswith("win"):
-            os.startfile(str(target))
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(target)])
-        else:
-            subprocess.Popen(["xdg-open", str(target)])
-        return True
-
-    def start_job(self, action, payload=None):
-        job_id = uuid.uuid4().hex
-        with self.lock:
-            self.jobs[job_id] = {"status": "queued", "message": "Queued"}
-        future = self.executor.submit(self._run_job, job_id, action, payload or {})
-        with self.lock:
-            self.jobs[job_id]["future"] = future
-        return {"job_id": job_id}
-
-    def job_status(self, job_id):
-        with self.lock:
-            job = self.jobs.get(job_id)
-            if not job:
-                return {"status": "missing", "error": "Job not found"}
-            result = dict(job)
-        result.pop("future", None)
-        return result
-
-    def _run_job(self, job_id, action, payload):
-        with self.lock:
-            self.jobs[job_id]["status"] = "running"
-            self.jobs[job_id]["message"] = action
-        try:
-            value = self._execute(action, payload)
-            with self.lock:
-                self.jobs[job_id].update(status="done", result=self._json(value), message="Complete")
-        except Exception as exc:
-            with self.lock:
-                self.jobs[job_id].update(status="error", error=str(exc), message="Failed")
-
-    def _execute(self, action, payload):
-        if action == "open_vault":
-            path = str(Path(payload["path"]).resolve())
-            self.context.service_container.open_vault(path)
-            self.context.active_vault_path = path
-            self.context.active_subfolder = None
-            return self._state()
-        if action == "prepare":
-            vault = self._vault()
-            return self.context.service_container.vault_service.index_vault(
-                vault,
-                self.context.service_container.vault_db,
-                ocr_client=self.context.service_container.llm_client,
-            )
-        if action == "ask":
-            vault = self._vault()
-            return self.context.service_container.orchestrator.handle_query(
-                payload["query"], vault, subfolder=self.context.active_subfolder
-            )
-        if action == "search":
-            vault = self._vault()
-            return self.context.service_container.rag_service.search(
-                payload["query"], vault.vault_id, subfolder=self.context.active_subfolder
-            )
-        if action == "generate":
-            return self.context.service_container.generation_service.generate(
-                asset_type=payload.get("asset_type", "summary"),
-                topic=payload.get("topic") or None,
-                count=payload.get("count"),
-                subfolder=self.context.active_subfolder,
-            )
-        if action == "chart":
-            return ChartGenerator.generate_chart(
-                vault=self._vault(),
-                relative_path=payload["relative_path"],
-                chart_type=payload.get("chart_type", "bar"),
-                title=payload.get("title") or None,
-            )
-        if action == "organise_preview":
-            rules = OrganisationRules(**payload["rules"])
-            return self.context.service_container.organisation_service.preview(
-                rules, subfolder=self.context.active_subfolder
-            )
-        if action == "organise_apply":
-            plan = OrganisationPlan.model_validate(payload["plan"])
-            return self.context.service_container.organisation_service.apply(plan)
-        if action == "duplicates":
-            result = self.context.service_container.organisation_service.detect_duplicates(
-                subfolder=self.context.active_subfolder
-            )
-            return {"exact": result[0], "versions": result[1]}
-        raise ValueError(f"Unknown desktop action: {action}")
-
-    def datasets(self):
-        vault = self._vault()
-        scope = vault.scope_root(self.context.active_subfolder)
-        generated = self.context.service_container.config.generated_output_folder
-        result = []
-        for path in scope.rglob("*"):
-            if path.is_file() and path.suffix.lower() in {".csv", ".xlsx"} and not is_ignored_source_path(path, generated):
-                result.append(vault.relative_path(path))
-        return sorted(result)
-
-    def audit(self):
-        vault = self._vault()
-        return self.context.service_container.audit_service.get_operations(vault.vault_id, limit=100)
-
-    def undo_operation(self, operation_id):
-        return self.context.service_container.audit_service.undo_operation(operation_id, self._vault())
-
-    def undo_last_batch(self):
-        vault = self._vault()
-        undoable = self.context.service_container.audit_service.get_undoable_operations(vault.vault_id)
-        if not undoable:
-            return []
-        if undoable[0].batch_id:
-            return self.context.service_container.audit_service.undo_batch(undoable[0].batch_id, vault)
-        return [self.context.service_container.audit_service.undo_operation(undoable[0].operation_id, vault)]
-
-    def settings(self):
-        config = self.context.service_container.config
-        return {
-            "ollama_base_url": config.ollama_base_url,
-            "ollama_model": config.ollama_model,
-            "temperature": config.temperature,
-            "retrieval_max_candidates": config.retrieval_max_candidates,
-            "generated_output_folder": config.generated_output_folder,
-        }
-
-    def installed_models(self, url=None):
-        endpoint = (url or self.context.service_container.config.ollama_base_url).rstrip("/")
-        response = requests.get(f"{endpoint}/api/tags", timeout=5)
-        response.raise_for_status()
-        return [item.get("name") for item in response.json().get("models", []) if item.get("name")]
-
-    def save_settings(self, values):
-        config = self.context.service_container.config
-        config.ollama_base_url = values.get("ollama_base_url", config.ollama_base_url).strip()
-        config.ollama_model = values.get("ollama_model", config.ollama_model).strip()
-        config.temperature = float(values.get("temperature", config.temperature))
-        config.retrieval_max_candidates = int(values.get("retrieval_max_candidates", config.retrieval_max_candidates))
-        config.generated_output_folder = values.get("generated_output_folder", config.generated_output_folder).strip()
-        config.save()
-        client = self.context.service_container._llm_client
-        if client:
-            client.base_url = config.ollama_base_url
-            client.model = config.ollama_model
-        return self.settings()
-
-    def shutdown(self):
-        self.executor.shutdown(wait=False, cancel_futures=True)
-        return True
-
-
-class ContextVaultApp:
-    pages = {
-        "Chat & Studio": "chat",
-        "Search": "search",
-        "Organise": "organise",
-        "Duplicates": "duplicates",
-        "Generate": "generate",
-        "Audit": "audit",
-        "Settings": "settings",
-    }
-
+class ContextVaultApp(QMainWindow):
     def __init__(self):
-        self.project_root = Path(__file__).resolve().parent.parent
-        self.api = DesktopAPI(self.project_root)
-        self.window = None
+        super().__init__()
+        
+        self.setWindowTitle("Context Vault")
+        self.resize(1240, 820)
+        
+        
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #0f172a;
+                color: #f8fafc;
+                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            }
+            QLabel {
+                color: #f1f5f9;
+            }
+            QComboBox, QLineEdit, QSpinBox {
+                background-color: #1e293b;
+                color: #f8fafc;
+                border: 1px solid #475569;
+                border-radius: 6px;
+                padding: 5px 8px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #1e293b;
+                color: #f8fafc;
+                selection-background-color: #0284c7;
+            }
+            QTableWidget, QTreeWidget {
+                background-color: #0f172a;
+                color: #f8fafc;
+                border: 1px solid #334155;
+                gridline-color: #1e293b;
+            }
+            QHeaderView::section {
+                background-color: #1e293b;
+                color: #94a3b8;
+                font-weight: bold;
+                border: 1px solid #334155;
+                padding: 6px;
+            }
+            QStatusBar {
+                background-color: #0f172a;
+                color: #94a3b8;
+                border-top: 1px solid #1e293b;
+            }
+        """)
+        
+        self.app_context = AppContext()
+        self.index_worker = None
+        
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        
+        self.stacked_widget = QStackedWidget()
+        
+        
+        self.welcome_page = WelcomePage(self.app_context)
+        self.welcome_page.vault_selected.connect(self.open_vault)
+        
+        self.stacked_widget.addWidget(self.welcome_page)
+        self.main_layout.addWidget(self.stacked_widget)
+        
+        
+        self.vault_ui_container = QWidget()
+        self.vault_layout = QHBoxLayout(self.vault_ui_container)
+        self.vault_layout.setContentsMargins(0, 0, 0, 0)
+        self.vault_layout.setSpacing(0)
+        
+        self.setup_sidebar()
+        self.setup_content_area()
+        
+        self.vault_layout.addWidget(self.sidebar_widget)
+        self.vault_layout.addWidget(self.content_stacked_widget)
+        
+        self.stacked_widget.addWidget(self.vault_ui_container)
+        
+        
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.vault_info_label = QLabel("No Vault Loaded")
+        self.llm_status_label = QLabel("LLM: Checking...")
+        self.status_bar.addPermanentWidget(self.vault_info_label)
+        self.status_bar.addPermanentWidget(self.llm_status_label)
+        
+        
+        self.show_welcome_screen()
 
-    def start(self):
-        import webview
-        page = (self.project_root / "desktop" / "web" / "index.html").resolve().as_uri()
-        self.window = webview.create_window(
-            "Context Vault",
-            page,
-            js_api=self.api,
-            width=1280,
-            height=860,
-            min_size=(980, 680),
-            text_select=True,
+    def setup_sidebar(self):
+        self.sidebar_widget = QFrame()
+        self.sidebar_widget.setFixedWidth(240)
+        self.sidebar_widget.setStyleSheet("background-color: #1e293b; color: white;")
+        
+        sidebar_layout = QVBoxLayout(self.sidebar_widget)
+        sidebar_layout.setContentsMargins(12, 20, 12, 20)
+        
+        
+        self.sidebar_vault_name = QLabel("Vault Name")
+        font = self.sidebar_vault_name.font()
+        font.setBold(True)
+        font.setPointSize(12)
+        self.sidebar_vault_name.setFont(font)
+        
+        self.sidebar_vault_path = QLabel("/path/to/vault")
+        self.sidebar_vault_path.setStyleSheet("color: #94a3b8; font-size: 10px;")
+        
+        self.sidebar_file_count = QLabel("0 files (filesystem retrieval ready)")
+        self.sidebar_file_count.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+        
+        
+        header_btns = QVBoxLayout()
+        header_btns.setSpacing(6)
+        
+        
+        self.index_vault_btn = QPushButton("Scan and Prepare Vault")
+        self.index_vault_btn.setStyleSheet("background-color: #0284c7; color: white; padding: 7px; font-weight: bold; border-radius: 4px;")
+        self.index_vault_btn.clicked.connect(self.start_indexing)
+        
+        self.index_progress_bar = QProgressBar()
+        self.index_progress_bar.setFixedHeight(12)
+        self.index_progress_bar.setTextVisible(False)
+        self.index_progress_bar.setVisible(False)
+        
+        self.index_status_label = QLabel("")
+        self.index_status_label.setStyleSheet("color: #38bdf8; font-size: 10px; font-style: italic;")
+        self.index_status_label.setVisible(False)
+        
+        self.change_vault_btn = QPushButton("Change Vault")
+        self.change_vault_btn.setStyleSheet("background-color: #334155; color: #e2e8f0; padding: 5px; border-radius: 4px;")
+        self.change_vault_btn.clicked.connect(self.show_welcome_screen)
+        
+        header_btns.addWidget(self.index_vault_btn)
+        header_btns.addWidget(self.index_progress_bar)
+        header_btns.addWidget(self.index_status_label)
+        header_btns.addWidget(self.change_vault_btn)
+        
+        sidebar_layout.addWidget(self.sidebar_vault_name)
+        sidebar_layout.addWidget(self.sidebar_vault_path)
+        sidebar_layout.addWidget(self.sidebar_file_count)
+        sidebar_layout.addSpacing(6)
+        sidebar_layout.addLayout(header_btns)
+        sidebar_layout.addSpacing(16)
+        
+        
+        self.nav_list = QListWidget()
+        self.nav_list.setStyleSheet("""
+            QListWidget {
+                border: none;
+                background-color: transparent;
+            }
+            QListWidget::item {
+                padding: 10px;
+                color: #e2e8f0;
+                border-radius: 6px;
+            }
+            QListWidget::item:selected {
+                background-color: #0284c7;
+                color: white;
+                font-weight: bold;
+            }
+            QListWidget::item:hover:!selected {
+                background-color: #334155;
+            }
+        """)
+        
+        nav_items = ["Chat & Studio", "Search", "Organise", "Duplicates", "Audit", "Settings"]
+        for item_text in nav_items:
+            item = QListWidgetItem(item_text)
+            item.setSizeHint(QSize(0, 38))
+            self.nav_list.addItem(item)
+            
+        self.nav_list.currentRowChanged.connect(self.change_page)
+        sidebar_layout.addWidget(self.nav_list)
+        sidebar_layout.addStretch()
+
+    def setup_content_area(self):
+        self.content_stacked_widget = QStackedWidget()
+        
+        from desktop.pages.generate_page import GeneratePage
+        self.pages = {
+            "Chat & Studio": ChatPage(self.app_context),
+            "Search": SearchPage(self.app_context),
+            "Organise": OrganisePage(self.app_context),
+            "Duplicates": DuplicatesPage(self.app_context),
+            "Generate": GeneratePage(self.app_context),
+            "Audit": AuditPage(self.app_context),
+            "Settings": SettingsPage(self.app_context)
+        }
+        
+        for page in self.pages.values():
+            self.content_stacked_widget.addWidget(page)
+
+    def show_welcome_screen(self):
+        self.welcome_page.load_recent()
+        self.stacked_widget.setCurrentWidget(self.welcome_page)
+        self.status_bar.hide()
+        self.app_context.active_vault_path = None
+        self.app_context.active_subfolder = None
+
+    def open_vault(self, path):
+        self.app_context.active_vault_path = path
+        self.app_context.active_subfolder = None
+        
+        
+        try:
+            self.app_context.service_container.open_vault(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open vault: {e}")
+            return
+            
+        self.update_vault_info()
+        
+        self.stacked_widget.setCurrentWidget(self.vault_ui_container)
+        self.status_bar.show()
+        
+        
+        self.nav_list.setCurrentRow(0)
+        self.change_page(0)
+
+    def start_indexing(self):
+        """Run full indexing pipeline in background thread."""
+        vault = self.app_context.service_container.vault
+        if not vault:
+            return
+
+        self.index_vault_btn.setEnabled(False)
+        self.index_progress_bar.setVisible(True)
+        self.index_progress_bar.setValue(0)
+        self.index_status_label.setVisible(True)
+        self.index_status_label.setText("Scanning vault files...")
+
+        self.index_worker = IndexWorker(self.app_context.service_container)
+        self.index_worker.progress.connect(self.handle_index_progress)
+        self.index_worker.finished.connect(self.handle_index_finished)
+        self.index_worker.error.connect(self.handle_index_error)
+        self.index_worker.start()
+
+    def handle_index_progress(self, cur, tot, msg):
+        self.index_progress_bar.setValue(cur)
+        self.index_status_label.setText(msg)
+
+    def handle_index_finished(self, stats):
+        self.index_vault_btn.setEnabled(True)
+        self.index_progress_bar.setVisible(False)
+        self.index_status_label.setText("Vault preparation complete!")
+        self.update_vault_info()
+        QMessageBox.information(
+            self, "Indexing Complete",
+            f"Vault prepared:\n- Files Parsed: {stats.get('parsed_files', stats.get('parsed', 0))}\n- Cached Passages: {stats.get('total_chunks', stats.get('chunks_created', 0))}"
         )
-        self.api.attach_window(self.window)
-        webview.start(debug=False)
 
-    def windowTitle(self):
-        return "Context Vault"
+    def handle_index_error(self, err_msg):
+        self.index_vault_btn.setEnabled(True)
+        self.index_progress_bar.setVisible(False)
+        self.index_status_label.setText("Indexing Failed")
+        QMessageBox.critical(self, "Indexing Error", f"Failed to index vault:\n{err_msg}")
 
-    def close(self):
-        self.api.shutdown()
-        if self.window:
-            self.window.destroy()
+    def update_vault_info(self):
+        vault = self.app_context.service_container.vault
+        if not vault:
+            return
+
+        name = vault.display_name
+        path_str = str(vault.root_path)
+        
+        self.sidebar_vault_name.setText(name)
+        self.sidebar_vault_path.setText(path_str)
+        
+        
+        info = self.app_context.service_container.vault_service.get_vault_status(vault)
+        f_count = info.get("file_count", 0)
+        c_count = info.get("chunk_count", 0)
+        
+        self.sidebar_file_count.setText(f"{f_count} files (filesystem retrieval ready; {c_count} cached passages)")
+        self.vault_info_label.setText(f"Vault: {name} ({f_count} files)")
+        
+        
+        
+        if self.app_context.service_container.has_llm:
+            self.llm_status_label.setText("Artifact provider: Available")
+            self.llm_status_label.setStyleSheet("color: #10b981;")
+        else:
+            self.llm_status_label.setText("Artifact provider: Optional (not checked)")
+            self.llm_status_label.setStyleSheet("color: #94a3b8;")
+
+    def change_page(self, index):
+        if 0 <= index < self.nav_list.count():
+            page_name = self.nav_list.item(index).text()
+            page = self.pages.get(page_name)
+            if page is not None:
+                self.content_stacked_widget.setCurrentWidget(page)

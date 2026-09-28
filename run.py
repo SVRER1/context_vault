@@ -1,11 +1,11 @@
-                     
+
 """
 Context Vault - Primary Application Launcher
 Unified entry point for both Desktop GUI and CLI.
 
 Usage:
-    python run.py                  # Launch the PyWebView Desktop Application
-    python run.py desktop          # Launch the PyWebView Desktop Application
+    python run.py                  # Launch the PySide6 Desktop Application
+    python run.py desktop          # Launch the PySide6 Desktop Application
     python run.py open <PATH>      # Run CLI command
     python run.py status           # Check active vault status
     python run.py --help           # Show CLI commands
@@ -15,13 +15,13 @@ import sys
 import os
 from pathlib import Path
 
-                                    
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 def launch_desktop():
-    """Launch the PyWebView Desktop GUI."""
+    """Launch the PySide6 Desktop GUI."""
     try:
         from desktop.main import main as desktop_main
         desktop_main()
@@ -41,12 +41,12 @@ def launch_cli():
         sys.exit(1)
 
 def main():
-                                                                           
+    
     if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1].lower() in ("desktop", "--desktop", "-d", "gui")):
         launch_desktop()
     else:
-                               
-                                      
+        
+        
         if sys.argv[1].lower() == "cli":
             sys.argv.pop(1)
         launch_cli()

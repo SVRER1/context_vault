@@ -1,4 +1,5 @@
 import uuid
+import json
 from typing import List, Optional
 from contextvault.core.models import ChunkRecord, ParsedDocument, DocumentSection
 
@@ -31,7 +32,7 @@ class DocumentChunker:
         chunk_index = 0
         rel_path = relative_path or doc.path
 
-                                               
+        
         if not doc.sections:
             if doc.text:
                 chunks.extend(self._split_text(
@@ -53,7 +54,7 @@ class DocumentChunker:
             section_tokens = self._estimate_tokens(section_text)
 
             if section_tokens <= target_tokens + overlap_tokens:
-                                   
+                
                 chunk = ChunkRecord(
                     id=str(uuid.uuid4()),
                     file_id=doc.file_id,
@@ -64,11 +65,19 @@ class DocumentChunker:
                     page=section.page,
                     section=section.sheet or (f"Slide {section.slide}" if section.slide else None),
                     heading=section.heading,
+                    line_start=section.line_start,
+                    line_end=section.line_end,
+                    slide=section.slide,
+                    sheet=section.sheet,
+                    cell_range=section.cell_range,
+                    char_start=section.char_start,
+                    char_end=section.char_end,
+                    metadata_json=json.dumps(section.metadata, ensure_ascii=False, default=str),
                 )
                 chunks.append(chunk)
                 chunk_index += 1
             else:
-                                                  
+                
                 section_chunks = self._split_text(
                     text=section_text,
                     file_id=doc.file_id,
@@ -79,7 +88,15 @@ class DocumentChunker:
                     start_index=chunk_index,
                     page=section.page,
                     heading=section.heading,
-                    section=section.sheet or (f"Slide {section.slide}" if section.slide else None)
+                    section=section.sheet or (f"Slide {section.slide}" if section.slide else None),
+                    line_start=section.line_start,
+                    line_end=section.line_end,
+                    slide=section.slide,
+                    sheet=section.sheet,
+                    cell_range=section.cell_range,
+                    char_start=section.char_start,
+                    char_end=section.char_end,
+                    metadata_json=json.dumps(section.metadata, ensure_ascii=False, default=str),
                 )
                 chunks.extend(section_chunks)
                 chunk_index += len(section_chunks)
@@ -97,7 +114,15 @@ class DocumentChunker:
         start_index: int,
         page: Optional[int] = None,
         heading: Optional[str] = None,
-        section: Optional[str] = None
+        section: Optional[str] = None,
+        line_start: Optional[int] = None,
+        line_end: Optional[int] = None,
+        slide: Optional[int] = None,
+        sheet: Optional[str] = None,
+        cell_range: Optional[str] = None,
+        char_start: Optional[int] = None,
+        char_end: Optional[int] = None,
+        metadata_json: str = "{}",
     ) -> List[ChunkRecord]:
         """Splits long text by paragraphs."""
         paragraphs = text.split('\n\n')
@@ -123,11 +148,19 @@ class DocumentChunker:
                     text=current_chunk_text.strip(),
                     page=page,
                     heading=heading,
-                    section=section
+                    section=section,
+                    line_start=line_start,
+                    line_end=line_end,
+                    slide=slide,
+                    sheet=sheet,
+                    cell_range=cell_range,
+                    char_start=char_start,
+                    char_end=char_end,
+                    metadata_json=metadata_json,
                 ))
                 chunk_idx += 1
                 
-                         
+                
                 words = current_chunk_text.split()
                 overlap_words = int(overlap_tokens / 1.3)
                 overlap_text = " ".join(words[-overlap_words:]) if overlap_words > 0 else ""
@@ -147,7 +180,15 @@ class DocumentChunker:
                 text=current_chunk_text.strip(),
                 page=page,
                 heading=heading,
-                section=section
+                section=section,
+                line_start=line_start,
+                line_end=line_end,
+                slide=slide,
+                sheet=sheet,
+                cell_range=cell_range,
+                char_start=char_start,
+                char_end=char_end,
+                metadata_json=metadata_json,
             ))
 
         return chunks

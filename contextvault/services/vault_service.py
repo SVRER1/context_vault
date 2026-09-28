@@ -43,15 +43,15 @@ class VaultService:
         if not resolved_path.is_dir():
             raise ValueError(f"Path is not a directory: {resolved_path}")
 
-                                         
+        
         vault_info = self.registry.get_or_create_vault(resolved_path)
 
-                                     
+        
         vault_data_dir = self.config.vault_data_dir(vault_info.id)
         vault_data_dir.mkdir(parents=True, exist_ok=True)
         (vault_data_dir / "cache").mkdir(exist_ok=True)
 
-                                            
+        
         vault_db = Database(vault_data_dir / "index.db")
         vault_db.initialize()
         vault_db.execute(
@@ -71,7 +71,7 @@ class VaultService:
         )
         vault_db.conn.commit()
 
-                             
+        
         vault = Vault(vault_info)
         self._active_vault = vault
 
@@ -124,7 +124,7 @@ class VaultService:
         scanner = FileScanner(vault, db)
         files = scanner.scan()
 
-                                             
+        
         vault_info = self.registry.get_vault(vault.vault_id)
         if vault_info:
             vault_info.file_count = len(files)
@@ -138,6 +138,7 @@ class VaultService:
         db: Database,
         progress_callback=None,
         ocr_client=None,
+        force: bool = False,
     ) -> dict[str, Any]:
         """Optional parse/cache pass; retrieval itself reads the filesystem live.
 
@@ -149,138 +150,31 @@ class VaultService:
         Returns:
             Dict with indexing statistics.
         """
-        from contextvault.indexing.scanner import FileScanner
-        from contextvault.indexing.chunker import DocumentChunker
-        from contextvault.parsers.registry import create_default_registry
+        
+        
+        from contextvault.indexing.index_service import IndexService
 
-        stats = {
-            "scanned": 0,
-            "parsed": 0,
-            "chunks_created": 0,
-            "errors": 0,
-            "skipped": 0,
-        }
-
-                 
-        scanner = FileScanner(vault, db)
-        files = scanner.scan()
-        stats["scanned"] = len(files)
-
-                                                                              
-                                                                             
-        current_ids = [file_record.id for file_record in files]
-        if current_ids:
-            placeholders = ",".join("?" for _ in current_ids)
-            db.execute(
-                f"DELETE FROM files WHERE vault_id = ? AND id NOT IN ({placeholders})",
-                (vault.vault_id, *current_ids),
-            )
-        else:
-            db.execute("DELETE FROM files WHERE vault_id = ?", (vault.vault_id,))
-        db.execute("DELETE FROM chunks WHERE vault_id = ?", (vault.vault_id,))
-        try:
-            db.execute("DELETE FROM chunks_fts WHERE vault_id = ?", (vault.vault_id,))
-        except Exception:
-                                                                         
-            pass
-        db.conn.commit()
-        if progress_callback:
-            progress_callback(0, len(files), "Scanning complete")
-
-                                      
-        parser_registry = create_default_registry(ocr_client=ocr_client)
-        chunker = DocumentChunker()
-
-        all_chunks = []
-
-        for i, file_record in enumerate(files):
-            try:
-                if progress_callback:
-                    progress_callback(i, len(files), f"Processing {file_record.filename}")
-
-                                                           
-                parser = parser_registry.get_parser(file_record.extension)
-                if parser is None:
-                    stats["skipped"] += 1
-                    continue
-
-                       
-                file_path = vault.root_path / file_record.relative_path
-                parsed_doc = parser.parse(file_path, file_record.id)
-                stats["parsed"] += 1
-
-                                           
-                db.execute(
-                    "UPDATE files SET parse_status = 'parsed', parser = ? WHERE id = ?",
-                    (type(parser).__name__, file_record.id),
-                )
-
-                       
-                chunks = chunker.chunk(
-                    parsed_doc,
-                    vault_id=vault.vault_id,
-                    relative_path=file_record.relative_path,
-                    target_tokens=self.config.chunk_size_tokens,
-                    overlap_tokens=self.config.chunk_overlap_tokens,
-                )
-                stats["chunks_created"] += len(chunks)
-
-                                    
-                for chunk in chunks:
-                    chunk_data = chunk.model_dump()
-                    chunk_data["vault_id"] = vault.vault_id
-                    chunk_data["relative_path"] = file_record.relative_path
-                    db.execute(
-                        """INSERT OR REPLACE INTO chunks
-                           (id, file_id, vault_id, relative_path, chunk_index, text, page, section, heading)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            chunk.id,
-                            chunk.file_id,
-                            vault.vault_id,
-                            file_record.relative_path,
-                            chunk.chunk_index,
-                            chunk.text,
-                            chunk.page,
-                            chunk.section,
-                            chunk.heading,
-                        ),
-                    )
-                    all_chunks.append(chunk)
-
-            except Exception as e:
-                logger.error(f"Error indexing {file_record.filename}: {e}")
-                stats["errors"] += 1
-                db.execute(
-                    "UPDATE files SET parse_status = 'error' WHERE id = ?",
-                    (file_record.id,),
-                )
-
-        db.conn.commit()
-
-                                                                             
-                                                                        
-        try:
-            from contextvault.retrieval.lexical import LexicalSearch
-            lexical = LexicalSearch(db)
-            lexical.index_chunks(all_chunks, vault_id=vault.vault_id)
-        except Exception as e:
-            logger.warning(f"Could not build lexical index: {e}")
-
-                               
-        vault_info = self.registry.get_vault(vault.vault_id)
-        if vault_info:
-            vault_info.file_count = stats["scanned"]
-            vault_info.chunk_count = stats["chunks_created"]
-            vault_info.last_indexed_at = datetime.now()
-            self.registry.update_vault(vault_info)
-
-        if progress_callback:
-            progress_callback(len(files), len(files), "Indexing complete")
-
-        stats["parsed_files"] = stats["parsed"]
-        stats["total_chunks"] = stats["chunks_created"]
-        return stats
+        result = IndexService(vault, db, self.config).reconcile(
+            force=force, progress_callback=progress_callback
+        )
+        chunks = db.fetch_one("SELECT COUNT(*) AS count FROM chunks WHERE vault_id = ?", (vault.vault_id,))["count"]
+        parsed = db.fetch_one(
+            "SELECT COUNT(*) AS count FROM files WHERE vault_id = ? AND extract_status IN ('ok', 'truncated')",
+            (vault.vault_id,),
+        )["count"]
+        result.update(
+            scanned=result["discovered"],
+            parsed=parsed,
+            parsed_files=parsed,
+            errors=result["failed"],
+            skipped=db.fetch_one(
+                "SELECT COUNT(*) AS count FROM files WHERE vault_id = ? AND extract_status = 'unsupported'",
+                (vault.vault_id,),
+            )["count"],
+            chunks_created=chunks,
+            total_chunks=chunks,
+        )
+        return result
 
     def get_vault_status(self, vault: Vault) -> dict[str, Any]:
         """Get current status for a vault."""

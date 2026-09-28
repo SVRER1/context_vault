@@ -25,8 +25,8 @@ class FileTransaction:
         
     def add_operation(self, op: OperationRecord):
         self.operations.append(op)
-                                      
-                                                            
+        
+        
         
     def execute_plan(self, plan: OrganisationPlan, approved: bool) -> list[OperationRecord]:
         if not approved:
@@ -34,7 +34,7 @@ class FileTransaction:
             
         completed_ops = []
         
-                                                                              
+        
         for p_op in plan.operations:
             source = self.vault.absolute_path(p_op.source)
             dest = self.vault.absolute_path(p_op.destination or p_op.source)
@@ -64,7 +64,7 @@ class FileTransaction:
                 completed_ops.append(op_record)
                 
         except Exception as e:
-                                                             
+            
             print(f"Plan execution partially failed: {e}")
             raise e
             

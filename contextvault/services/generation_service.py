@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any
 
 from contextvault.core.config import get_config
-from contextvault.core.exceptions import OllamaUnavailableError
 from contextvault.core.models import GeneratedAsset
 from contextvault.core.vault import Vault
 from contextvault.generation.generator import ContentGenerator
@@ -19,12 +18,17 @@ logger = logging.getLogger(__name__)
 
 
 class GenerationService:
-    """Service for generating content using LLMs and vault context."""
+    """Service for evidence reports and optional generated artifacts."""
 
-    def __init__(self, vault: Vault, db: Database, llm_client: Any, retriever: Any = None, retrieval_service: Any = None):
+    def __init__(self, vault: Vault, db: Database, llm_client: Any = None, retriever: Any = None,
+                 retrieval_service: Any = None, artifact_provider: Any = None):
         self.vault = vault
         self.db = db
         self.llm_client = llm_client
+        if artifact_provider is None and llm_client is not None:
+            from contextvault.generation.artifact_provider import ExistingLLMAdapter
+            artifact_provider = ExistingLLMAdapter(llm_client)
+        self.artifact_provider = artifact_provider
         self.retriever = retriever
         self.retrieval_service = retrieval_service
 
@@ -48,17 +52,12 @@ class GenerationService:
         Returns:
             GeneratedAsset with metadata about the created file.
 
-        Raises:
-            OllamaUnavailableError: If LLM is not available.
+        When no provider is available, ContentGenerator writes a deterministic
+        report from retrieved evidence instead of blocking core vault use.
         """
-        if self.llm_client is None:
-            raise OllamaUnavailableError(
-                "Local LLM is not available for generation. "
-                "Please ensure Ollama is running."
-            )
-
         generator = ContentGenerator(
-            llm_client=self.llm_client,
+            llm_client=None,
+            artifact_provider=self.artifact_provider,
             retriever=self.retriever,
             retrieval_service=self.retrieval_service,
             vault=self.vault,
@@ -73,7 +72,7 @@ class GenerationService:
             filename=filename,
         )
 
-                            
+        
         try:
             self.db.execute(
                 """INSERT INTO generated_assets 

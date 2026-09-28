@@ -125,3 +125,139 @@ ALL_SCHEMAS = [
     GENERATED_ASSETS_SCHEMA,
     SETTINGS_SCHEMA
 ]
+
+
+
+
+CURRENT_SCHEMA_VERSION = 5
+
+MIGRATION_1_FILE_COLUMNS = {
+    "path_key": "TEXT",
+    "parent_path": "TEXT",
+    "mime_type": "TEXT",
+    "mtime_ns": "INTEGER",
+    "ctime_ns": "INTEGER",
+    "word_count": "INTEGER NOT NULL DEFAULT 0",
+    "document_title": "TEXT",
+    "document_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+    "extract_status": "TEXT NOT NULL DEFAULT 'pending'",
+    "extract_error": "TEXT",
+    "last_seen_scan": "TEXT",
+}
+
+MIGRATION_1_CHUNK_COLUMNS = {
+    "line_start": "INTEGER",
+    "line_end": "INTEGER",
+    "slide": "INTEGER",
+    "sheet": "TEXT",
+    "cell_range": "TEXT",
+    "char_start": "INTEGER",
+    "char_end": "INTEGER",
+    "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+}
+
+FILE_TAGS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS file_tags (
+    file_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    tag_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (file_id, tag_key),
+    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_file_tags_tag_key ON file_tags(tag_key);
+"""
+
+INDEX_RUNS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS index_runs (
+    run_id TEXT PRIMARY KEY,
+    vault_id TEXT NOT NULL,
+    scope TEXT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    discovered INTEGER NOT NULL DEFAULT 0,
+    created INTEGER NOT NULL DEFAULT 0,
+    updated INTEGER NOT NULL DEFAULT 0,
+    moved INTEGER NOT NULL DEFAULT 0,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    unchanged INTEGER NOT NULL DEFAULT 0,
+    failed INTEGER NOT NULL DEFAULT 0,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    FOREIGN KEY (vault_id) REFERENCES vaults(id)
+);
+CREATE INDEX IF NOT EXISTS idx_index_runs_vault_started
+    ON index_runs(vault_id, started_at);
+"""
+
+CHUNKS_FTS5_SCHEMA = """
+CREATE VIRTUAL TABLE chunks_fts USING fts5(
+    id UNINDEXED,
+    file_id UNINDEXED,
+    vault_id UNINDEXED,
+    relative_path UNINDEXED,
+    filename,
+    text,
+    heading,
+    section,
+    tokenize='unicode61 remove_diacritics 2'
+);
+"""
+
+MIGRATION_2_OPERATION_PLANS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS file_operation_plans (
+    plan_id TEXT PRIMARY KEY,
+    vault_id TEXT NOT NULL,
+    scope TEXT,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    index_run_id TEXT,
+    status TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    FOREIGN KEY (vault_id) REFERENCES vaults(id)
+);
+CREATE INDEX IF NOT EXISTS idx_operation_plans_vault_created
+    ON file_operation_plans(vault_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_operation_plans_status_expiry
+    ON file_operation_plans(status, expires_at);
+"""
+
+MIGRATION_3_JOURNAL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS operation_batches_v3 (
+    batch_id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL,
+    vault_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    error TEXT,
+    FOREIGN KEY (plan_id) REFERENCES file_operation_plans(plan_id),
+    FOREIGN KEY (vault_id) REFERENCES vaults(id)
+);
+CREATE TABLE IF NOT EXISTS operation_items_v3 (
+    item_id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL,
+    plan_item_index INTEGER NOT NULL,
+    file_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    destination_path TEXT NOT NULL,
+    temp_path TEXT,
+    before_hash TEXT NOT NULL,
+    after_hash TEXT,
+    expected_size INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    error TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    index_applied INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (batch_id) REFERENCES operation_batches_v3(batch_id)
+);
+CREATE INDEX IF NOT EXISTS idx_operation_batches_v3_vault_created
+    ON operation_batches_v3(vault_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_operation_items_v3_batch_state
+    ON operation_items_v3(batch_id, state);
+"""

@@ -59,67 +59,29 @@ class FileScanner:
         )
 
     def scan(self) -> List[FileRecord]:
+        """Compatibility entry point backed by the incremental reconciler."""
+        from contextvault.indexing.index_service import IndexService
+
         self.event_bus.emit(Event(type=EventType.SCAN_STARTED, data={"vault_id": self.vault.vault_id}))
+        IndexService(self.vault, self.db, self.config).reconcile()
         records = []
-        scanned_count = 0
-        
-        for root, dirs, files in os.walk(self.vault.root_path):
-            root_path = Path(root)
-            dirs[:] = [d for d in dirs if not self._should_ignore(root_path / d)]
-            
-            for file_name in files:
-                file_path = root_path / file_name
-                if self._should_ignore(file_path):
-                    continue
-                    
-                try:
-                    record = self._get_file_info(file_path)
-                    records.append(record)
-                    scanned_count += 1
-                    
-                                                               
-                    existing = self.db.get_file_by_path(self.vault.vault_id, record.relative_path)
-                    if existing:
-                                                                     
-                        record_id = existing["id"]
-                        record.id = record_id
-                        self.db.execute('''
-                            UPDATE files SET
-                                filename = ?, extension = ?, size = ?, mtime = ?,
-                                created_time = ?, sha256 = ?, mime_family = ?
-                            WHERE id = ?
-                        ''', (
-                            record.filename, record.extension, record.size, record.mtime,
-                            record.created_time, record.sha256, record.mime_family, record_id
-                        ))
-                    else:
-                        self.db.execute('''
-                            INSERT INTO files (
-                                id, vault_id, relative_path, filename, extension,
-                                size, mtime, created_time, sha256, mime_family,
-                                parser, parse_status
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (
-                            record.id, record.vault_id, record.relative_path, record.filename, record.extension,
-                            record.size, record.mtime, record.created_time, record.sha256, record.mime_family,
-                            record.parser, record.parse_status
-                        ))
-                    
-                    if scanned_count % 100 == 0:
-                        self.db.conn.commit()
-                        self.event_bus.emit(Event(
-                            type=EventType.SCAN_PROGRESS, 
-                            data={"vault_id": self.vault.vault_id, "scanned": scanned_count}
-                        ))
-                except Exception as e:
-                    self.event_bus.emit(Event(
-                        type=EventType.ERROR, 
-                        data={"vault_id": self.vault.vault_id, "file": str(file_path), "error": str(e)}
-                    ))
-                    
-        self.db.conn.commit()
-        self.event_bus.emit(Event(
-            type=EventType.SCAN_COMPLETE, 
-            data={"vault_id": self.vault.vault_id, "total": scanned_count}
-        ))
+        for row in self.db.get_all_files(self.vault.vault_id):
+            try:
+                records.append(FileRecord(
+                    id=row["id"], vault_id=row["vault_id"], relative_path=row["relative_path"],
+                    filename=row["filename"], extension=row["extension"], size=row["size"],
+                    mtime=row["mtime"], created_time=row["created_time"], sha256=row["sha256"],
+                    mime_family=row["mime_family"], parser=row.get("parser"),
+                    parse_status=row.get("parse_status", "pending"), indexed_at=row.get("indexed_at"),
+                    path_key=row.get("path_key"), parent_path=row.get("parent_path"),
+                    mime_type=row.get("mime_type"), mtime_ns=row.get("mtime_ns"),
+                    ctime_ns=row.get("ctime_ns"), word_count=row.get("word_count", 0),
+                    document_title=row.get("document_title"),
+                    document_metadata_json=row.get("document_metadata_json", "{}"),
+                    extract_status=row.get("extract_status", "pending"),
+                    extract_error=row.get("extract_error"), last_seen_scan=row.get("last_seen_scan"),
+                ))
+            except Exception as exc:
+                self.event_bus.emit(Event(type=EventType.ERROR, data={"vault_id": self.vault.vault_id, "error": str(exc)}))
+        self.event_bus.emit(Event(type=EventType.SCAN_COMPLETE, data={"vault_id": self.vault.vault_id, "total": len(records)}))
         return records

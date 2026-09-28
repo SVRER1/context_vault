@@ -71,6 +71,9 @@ class AuditService:
         undo_mgr = UndoManager(self.db, vault)
         return undo_mgr.undo_batch(batch_id)
 
+    def undo_batch_report(self, batch_id: str, vault: Vault) -> dict:
+        return UndoManager(self.db, vault).undo_batch_report(batch_id)
+
     def get_undoable_operations(self, vault_id: str) -> list[OperationRecord]:
         """Get operations that can currently be undone."""
         rows = self.db.fetch_all(
@@ -80,6 +83,54 @@ class AuditService:
             (vault_id,),
         )
         return [self._row_to_record(row) for row in rows]
+
+    def get_journal_history(self, vault: Vault, limit: int = 50) -> list[dict]:
+        """Return durable plan batches with per-item observed recovery assessments."""
+        from contextvault.filesystem.recovery import RecoveryService
+
+        return RecoveryService(vault, self.db).history(limit=limit)
+
+    def inspect_journal_batch(self, batch_id: str, vault: Vault):
+        from contextvault.filesystem.recovery import RecoveryService
+
+        return RecoveryService(vault, self.db).inspect_batch(batch_id)
+
+    def recover_journal_batch(self, batch_id: str, vault: Vault, *, approved: bool) -> dict:
+        from contextvault.filesystem.recovery import RecoveryService
+
+        return RecoveryService(vault, self.db).recover(batch_id, approved=approved)
+
+    def can_undo_journal_item(self, item_id: str, vault: Vault) -> bool:
+        from contextvault.filesystem.undo import UndoManager
+
+        return UndoManager(self.db, vault).can_undo_journal_item(item_id)
+
+    def undo_journal_item(self, item_id: str, vault: Vault, *, approved: bool) -> dict:
+        from contextvault.filesystem.undo import UndoManager
+
+        return UndoManager(self.db, vault).undo_journal_item(item_id, approved=approved)
+
+    def undo_journal_batch(self, batch_id: str, vault: Vault, *, approved: bool) -> dict:
+        if not approved:
+            raise PermissionError("Explicit approval is required to undo a journal batch.")
+        rows = self.db.fetch_all(
+            "SELECT item_id FROM operation_items_v3 WHERE batch_id=? ORDER BY plan_item_index DESC",
+            (batch_id,),
+        )
+        manager = UndoManager(self.db, vault)
+        outcomes = []
+        for row in rows:
+            item_id = row["item_id"]
+            if not manager.can_undo_journal_item(item_id):
+                outcomes.append({"item_id": item_id, "status": "refused", "reason": "copy, already undone, or current paths/hashes do not prove safe reversal"})
+                continue
+            try:
+                outcomes.append(manager.undo_journal_item(item_id, approved=True))
+            except Exception as exc:
+                outcomes.append({"item_id": item_id, "status": "failed", "reason": str(exc)})
+        undone = sum(row.get("status") == "undone" for row in outcomes)
+        status = "undone" if undone == len(rows) and rows else "partial" if undone else "refused"
+        return {"batch_id": batch_id, "status": status, "items": outcomes}
 
     def _row_to_record(self, row: dict) -> OperationRecord:
         """Convert a database row to an OperationRecord."""

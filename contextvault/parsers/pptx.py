@@ -39,15 +39,17 @@ class PPTXParser(BaseParser):
                 slide_content = '\n'.join(slide_text)
                 full_content.append(slide_content)
                 sections.append(DocumentSection(
-                    title=f"Slide {i + 1}",
-                    content=slide_content,
+                    heading=f"Slide {i + 1}",
+                    text=slide_content,
+                    slide=i + 1,
                     metadata={"slide": i + 1}
                 ))
                 
         return ParsedDocument(
             file_id=file_id,
+            path=str(file_path),
             title=title,
-            content='\n\n'.join(full_content),
+            text='\n\n'.join(full_content),
             sections=sections,
             metadata={"source_type": "pptx"}
         )

@@ -18,8 +18,14 @@ from contextvault.llm.prompts import (
 )
 
 class ContentGenerator:
-    def __init__(self, llm_client: Optional[LLMClient], retriever: Any, vault: Vault, db: Database, subfolder: str | None = None, retrieval_service=None):
+    def __init__(self, llm_client: Optional[LLMClient] = None, retriever: Any = None,
+                 vault: Vault = None, db: Database = None, subfolder: str | None = None,
+                 retrieval_service=None, artifact_provider=None):
         self.llm_client = llm_client
+        if artifact_provider is None and llm_client is not None:
+            from contextvault.generation.artifact_provider import ExistingLLMAdapter
+            artifact_provider = ExistingLLMAdapter(llm_client)
+        self.artifact_provider = artifact_provider
         self.retriever = retriever
         self.retrieval_service = retrieval_service
         self.vault = vault
@@ -36,9 +42,9 @@ class ContentGenerator:
     ) -> GeneratedAsset:
         query = topic if topic else "overview summary"
         
-                                                                             
-                                                                              
-                                    
+        
+        
+        
         chunks: List[SearchResult] = []
         evidence_document = None
         if self.retrieval_service is not None:
@@ -68,7 +74,7 @@ class ContentGenerator:
         else:
             context = "No relevant context found in vault."
         
-                          
+        
         asset_lower = asset_type.lower().replace("_", "-")
         count_val = count or 10
         
@@ -92,26 +98,31 @@ class ContentGenerator:
         else:
             prompt = SUMMARY_PROMPT.format(content=context)
 
-                                                            
+        
         if evidence_document is not None and not evidence_document.sufficient:
             content = (
                 f"# {asset_type.replace('-', ' ').title()}: {query}\n\n"
                 f"{evidence_document.insufficiency_reason or 'The selected source scope does not contain enough evidence.'}\n"
             )
-        elif self.llm_client and self.llm_client.is_available():
+        elif self.artifact_provider is not None:
             try:
-                from contextvault.llm.prompts import SYSTEM_ASSISTANT
-                content = self.llm_client.generate(prompt, system=SYSTEM_ASSISTANT, temperature=0.2)
-            except Exception:
-                content = f"# {asset_type.title()}: {query}\n\n## Content Overview\n\n{context}\n"
+                from contextvault.generation.artifact_provider import ArtifactRequest
+                content = self.artifact_provider.generate(ArtifactRequest(
+                    artifact_type=asset_type,
+                    prompt=prompt,
+                    evidence=context,
+                    source_scope=self.subfolder,
+                ))
+            except Exception as exc:
+                content = f"# {asset_type.title()}: {query}\n\n_Model generation unavailable ({exc}). Deterministic evidence report follows._\n\n## Retrieved Material\n\n{context}\n"
         else:
             content = f"# {asset_type.title()}: {query}\n\n_Generated without active LLM based on indexed vault material._\n\n## Summary of Retrieved Material\n\n{context}\n"
 
-                      
+        
         citation_items = evidence_document.passages if evidence_document is not None else chunks
         citations = CitationBuilder.build_citations(citation_items)
 
-                             
+        
         title = f"{asset_type.replace('-', ' ').title()}" + (f" - {topic}" if topic else "")
         out_path = self._get_output_path(self.vault, filename, asset_type)
         final_path = self.writer.write_markdown(content, out_path, title, citations)

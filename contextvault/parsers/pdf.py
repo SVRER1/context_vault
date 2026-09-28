@@ -1,4 +1,4 @@
-import fitz           
+import fitz  
 from pathlib import Path
 from contextvault.core.models import ParsedDocument, DocumentSection
 from contextvault.core.exceptions import ParseError
@@ -37,8 +37,9 @@ class PDFParser(BaseParser):
                 if text.strip():
                     full_content.append(text)
                     sections.append(DocumentSection(
-                        title=f"Page {page_num + 1}",
-                        content=text.strip(),
+                        heading=f"Page {page_num + 1}",
+                        text=text.strip(),
+                        page=page_num + 1,
                         metadata={"page": page_num + 1}
                     ))
         except Exception as e:
@@ -48,8 +49,9 @@ class PDFParser(BaseParser):
             
         return ParsedDocument(
             file_id=file_id,
+            path=str(file_path),
             title=title,
-            content='\n\n'.join(full_content),
+            text='\n\n'.join(full_content),
             sections=sections,
             metadata={"source_type": "pdf", "pages": len(sections)}
         )

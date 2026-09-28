@@ -81,8 +81,8 @@ def get_config() -> AppConfig:
             try:
                 with open(config_file, "r") as f:
                     data = json.load(f)
-                                                                         
-                                                                        
+                
+                
                 if data.get("ollama_model") in {
                     "LiquidAI/lfm2.5-1.2b-instruct:latest",
                     "lfm2.5",

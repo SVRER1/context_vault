@@ -73,7 +73,7 @@ class FileWatcher:
                         self._file_hashes[path_str] = self._get_file_hash(filepath)
                         new_files.append(filepath)
                     elif mtime > self._last_modified_times[path_str]:
-                                                 
+                        
                         new_hash = self._get_file_hash(filepath)
                         if new_hash != self._file_hashes.get(path_str):
                             self._last_modified_times[path_str] = mtime
@@ -82,7 +82,7 @@ class FileWatcher:
                 except Exception:
                     pass
 
-                           
+        
         for known_path in list(self._last_modified_times.keys()):
             if known_path not in current_files:
                 deleted_files.append(Path(known_path))

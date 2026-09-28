@@ -50,7 +50,7 @@ class ShallowPeeker:
         ext = file_path.suffix.lower()
         size = file_path.stat().st_size
 
-                                                
+        
         if ext in BINARY_EXTENSIONS:
             return {
                 "filename": file_path.name,
@@ -105,7 +105,7 @@ class ShallowPeeker:
         if len(preview_text) > 800:
             preview_text = preview_text[:800] + "..."
 
-                                         
+        
         clean_preview = preview_text.encode("ascii", errors="replace").decode("ascii").replace("?", " ")
 
         return {

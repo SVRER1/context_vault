@@ -22,7 +22,8 @@ class Orchestrator:
 
     def __init__(self, services: Dict[str, Any]):
         self.services = services
-        self.llm_client = services.get("llm_client")
+        self.llm_client = None  
+        self.artifact_provider = services.get("artifact_provider")
         self.rag_service = services.get("rag_service")
         self.organisation_service = services.get("organisation_service")
         self.generation_service = services.get("generation_service")
@@ -40,20 +41,20 @@ class Orchestrator:
         lower = clean_input.lower()
 
         try:
-                                                                            
+            
             if any(w in lower for w in ["peek", "inspect directory", "inspect folder", "read 10 lines", "read 20 lines", "preview files"]):
                 return self._handle_peek(vault, subfolder=subfolder)
 
-                                                                                     
+            
             if any(w in lower for w in ["ocr", "read text from image", "extract text from image"]):
                 return self._handle_ocr(clean_input, vault, subfolder=subfolder)
 
-                                                            
+            
             if any(w in lower for w in ["chart", "plot", "graph", "visualize", "bar chart", "line chart", "pie chart"]):
                 return self._handle_chart(clean_input, vault, subfolder=subfolder)
 
-                                                       
-            classification = IntentRouter.classify(clean_input, self.llm_client)
+            
+            classification = IntentRouter.classify(clean_input)
             intent = classification.intent
             params = classification.parameters or {}
 
@@ -76,7 +77,7 @@ class Orchestrator:
             elif intent == "status":
                 return self._handle_status(vault)
             else:
-                                               
+                
                 return self._handle_rag(clean_input, vault, subfolder=subfolder)
 
         except Exception as e:
@@ -129,7 +130,6 @@ class Orchestrator:
         """Report implemented and reachable agent capabilities, not marketing claims."""
         config = self.services.get("config")
         model = config.ollama_model if config else "gemma4:e2b"
-        llm_online = bool(self.llm_client and self.llm_client.is_available())
         registry_tools = self.tool_registry.list_tools() if self.tool_registry else []
 
         lines = [
@@ -138,18 +138,18 @@ class Orchestrator:
             "This report describes executable code paths in the active vault, including limits and unavailable dependencies.",
             "",
             "#### Runtime",
-            f"- **LLM**: `{model}` — {'online' if llm_online else 'offline'} via Ollama.",
-            "- **Retrieval**: filesystem-native survey, lexical/path candidate discovery, selective reading, and query-scoped evidence Markdown. No embeddings or vector database are required.",
-            "- **Execution model**: deterministic intent routing calls Python services; the LLM selects candidates and writes grounded text. It does not receive unrestricted shell or filesystem access.",
+            f"- **Optional artifact model**: `{model}` — availability is checked only when text synthesis is requested.",
+            "- **Retrieval**: indexed BM25 search, deterministic path/metadata rules, located passages, and query-scoped evidence. No embeddings or vector database are required.",
+            "- **Execution model**: deterministic intent routing and Python services select files and paths. A model receives only selected evidence when synthesis is requested.",
             "",
             "#### Reachable operations",
-            "- **Ask/search**: live filesystem survey, path/lexical/metadata ranking, bounded previews, selective deep reading, and source citations. It does not require prior indexing.",
+            "- **Ask/search**: ranked indexed evidence and source citations work without a model; incomplete extraction is reported.",
             "- **Generate artifacts**: summaries, study guides, revision notes, flashcards, quizzes, timelines, vault reports, Markdown, and styled PDFs from retrieved vault context. It does not independently research the web.",
             "- **Inspect**: shallow directory/file previews capped at 10–20 lines per file.",
             "- **Charts**: inspect CSV/XLSX data and generate bar, line, scatter, or pie PNGs; column inference is deterministic.",
-            "- **Organise**: preview and apply file moves by type/family/date/size/semantic rules, with collision checks, hash verification, audit history, and undo.",
+            "- **Organise**: deterministic grouping and explicit rule routes with reviewed mappings, collision checks, hash verification, journal history, and safe undo.",
             "- **Duplicates**: exact SHA-256 duplicates and probable filename/version revisions.",
-            "- **Images**: OCR runs when an image is selected for evidence or through the explicit OCR tool. Tesseract is preferred, with Ollama vision fallback.",
+            "- **Images**: optional local Tesseract OCR; unsupported/unreadable images remain visible without extracted text.",
             "",
             "#### Registered tool declarations",
         ]
@@ -161,18 +161,18 @@ class Orchestrator:
         lines += [
             "",
             "#### Important limits",
-            "- The current agent does not autonomously browse the web, send email, call third-party SaaS, execute arbitrary shell commands, or edit/delete existing file contents.",
+            "- The current agent does not autonomously browse the web, send email, call third-party SaaS, execute arbitrary shell commands, or delete existing files.",
             "- The generated artifact is only as strong as retrieval coverage and source quality; citations identify retrieved evidence passages, not independent fact-checking.",
-            "- Image OCR depends on image legibility. If Tesseract is missing, the configured Gemma model must support Ollama image input; otherwise the image remains indexed as a file with no text chunks.",
+            "- Image OCR depends on image legibility and local Tesseract availability; without it, the image remains indexed as a file with no text chunks.",
         ]
         return AgentResult(
             result_type="capabilities",
             content="\n".join(lines),
             data={
                 "model": model,
-                "llm_online": llm_online,
+                "llm_online": None,
                 "registered_tools": [tool.name for tool in registry_tools],
-                "ocr": "tesseract-preferred-with-ollama-vision-fallback",
+                "ocr": "optional-local-tesseract",
             },
         )
 
@@ -193,9 +193,9 @@ class Orchestrator:
         """Extract data from a CSV or Excel file and generate a high-quality chart."""
         lower = user_input.lower()
 
-                                        
+        
         csv_files = list(vault.root_path.rglob("*.csv")) + list(vault.root_path.rglob("*.xlsx"))
-                                 
+        
         csv_files = [
             f for f in csv_files
             if not any(part in (".git", ".venv", ".contextvault", vault.generated_dir.name) for part in f.parts)
@@ -208,7 +208,7 @@ class Orchestrator:
                 content="No CSV or Excel dataset files found in the vault to generate charts from.",
             )
 
-                                          
+        
         target_file = csv_files[0]
         for f in csv_files:
             if f.name.lower() in lower or f.stem.lower() in lower:
@@ -217,7 +217,7 @@ class Orchestrator:
 
         rel_path = vault.relative_path(target_file)
 
-                           
+        
         chart_type = "bar"
         if "line" in lower or "trend" in lower:
             chart_type = "line"
@@ -246,7 +246,7 @@ class Orchestrator:
                 f"![{title}]({img_rel})"
             )
 
-                                                                     
+            
             if "pdf" in lower or "report" in lower:
                 pdf_info = PDFCompiler.compile_pdf(
                     vault=vault,
@@ -289,7 +289,7 @@ class Orchestrator:
         if not self.rag_service:
             return AgentResult(result_type="error", content="Search service unavailable.")
 
-                              
+        
         query = params.get("query")
         if not query or query == user_input:
             query = re.sub(r"^(?:search(?:\s+for)?|find|where(?:\s+is|\s+are)?|look\s+up)\s+", "", user_input, flags=re.IGNORECASE).strip()
@@ -389,31 +389,27 @@ class Orchestrator:
             max_depth=2,
         )
 
-        plan = self.organisation_service.preview(rules, subfolder=subfolder)
+        plan = self.organisation_service.preview_plan(rules, subfolder=subfolder)
 
         lines = [
             f"### Proposed Organisation Plan",
             f"**Strategy**: `{strategy}` | **Grouping**: `{primary}`",
-            f"- **Directories to create**: `{len(plan.directories_to_create)}`",
-            f"- **Files to move**: `{len(plan.operations)}`",
-            f"- **Files untouched**: `{len(plan.untouched_files)}`\n",
+            f"- **Plan ID**: `{plan.plan_id}`",
+            f"- **Files selected**: `{len(plan.items)}`",
+            f"- **Conflicts**: `{len(plan.conflicts)}`",
+            f"- **Skipped / review**: `{len(plan.skips)}`\n",
         ]
 
-        if plan.directories_to_create:
-            lines.append("**New Folders:**")
-            for d in plan.directories_to_create:
-                lines.append(f"- `[Folder] {d}`")
-            lines.append("")
+        if plan.items:
+            lines.append("**Reviewed source → destination mappings:**")
+            for op in plan.items[:10]:
+                lines.append(f"- `{op.source}` → `{op.destination}` ({op.action})")
+            if len(plan.items) > 10:
+                lines.append(f"- _...and {len(plan.items) - 10} more mappings._")
+        for issue in plan.conflicts[:10]:
+            lines.append(f"- **Conflict:** `{issue.path or issue.file_id}` — {issue.message}")
 
-        if plan.operations:
-            lines.append("**Sample Operations (Reversible):**")
-            for op in plan.operations[:5]:
-                lines.append(f"- `{op.source}` -> `{op.destination}`")
-            if len(plan.operations) > 5:
-                lines.append(f"- _...and {len(plan.operations) - 5} more files._")
-            lines.append("")
-
-        lines.append("> Use the **Organise** page or run `cvault organise` to inspect the full tree and apply with SHA-256 verification.")
+        lines.append(f"\nPlan digest: `{plan.digest}`. Review and commit using the Organise page.")
 
         return AgentResult(
             result_type="organisation_plan",
@@ -450,7 +446,7 @@ class Orchestrator:
                 flags=re.IGNORECASE,
             ).strip().strip("\"'")
 
-                                 
+        
         asset = self.generation_service.generate(
             asset_type=asset_type,
             topic=topic if topic else None,
@@ -470,7 +466,7 @@ class Orchestrator:
             f"- **Markdown File**: `{asset.relative_path}`\n"
         )
 
-                                            
+        
         if "pdf" in lower or asset_type in ("study-guide", "vault-report"):
             try:
                 pdf_res = PDFCompiler.compile_pdf(
@@ -504,8 +500,8 @@ class Orchestrator:
             f"- **Chunks Indexed**: `{info.get('chunk_count', 0)}`\n"
             f"- **Last Indexed**: `{info.get('last_indexed_at', 'Never')}`\n"
             f"- **Local LLM**: `{model_name}`\n"
-            f"- **Ollama Connection**: `{'Connected' if (self.llm_client and self.llm_client.is_available()) else 'Offline'}`\n"
-            "- **Retrieval Engine**: `Filesystem-Native Agentic Retrieval`"
+            "- **Optional synthesis provider**: `not probed; checked only when requested`\n"
+            "- **Retrieval Engine**: `SQLite FTS5/BM25 deterministic retrieval`"
         )
 
         return AgentResult(

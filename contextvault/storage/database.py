@@ -3,6 +3,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import List, Dict, Any, Optional
 from contextvault.storage.schema import ALL_SCHEMAS
+from contextvault.storage.migrations import backup_unversioned_database, migrate
 
 class Database:
     def __init__(self, db_path: Path | str):
@@ -17,16 +18,14 @@ class Database:
         self.conn.execute("PRAGMA foreign_keys=ON;")
 
     def initialize(self):
-        """Creates tables from schema."""
+        """Create legacy tables, then apply versioned, data-preserving upgrades."""
+        version = int(self.conn.execute("PRAGMA user_version").fetchone()[0])
+        if version == 0:
+            backup_unversioned_database(self.conn, self.db_path)
         for schema_sql in ALL_SCHEMAS:
             self.conn.executescript(schema_sql)
-                                                                                 
-        try:
-            self.conn.execute("ALTER TABLE generated_assets ADD COLUMN source_scope TEXT")
-        except sqlite3.OperationalError as exc:
-            if "duplicate column name" not in str(exc).lower():
-                raise
         self.conn.commit()
+        migrate(self.conn)
 
     @contextmanager
     def transaction(self):

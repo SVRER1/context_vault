@@ -35,12 +35,12 @@ class DeterministicOrganiser:
             rel_target = f"{folder_name}/{file.filename}"
             target_abs = vault.root_path / rel_target
             
-                                    
+            
             if source_abs.resolve() == target_abs.resolve():
                 plan.untouched_files.append(file.relative_path)
                 continue
                 
-                                                    
+            
             if target_abs.exists():
                 plan.untouched_files.append(file.relative_path)
                 plan.warnings.append(f"Destination already exists: {rel_target}. Skipped to avoid collision.")

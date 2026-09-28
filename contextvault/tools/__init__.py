@@ -35,7 +35,7 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
             vault, subfolder=subfolder, max_lines_per_file=max_lines_per_file
         )
 
-                                                             
+    
     registry.register(
         name="peek_directory",
         description="Inspect files in a folder, reading at most 10-20 lines per file to understand file contents without context overflow.",
@@ -46,7 +46,7 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
         func=scoped_directory,
     )
 
-                                   
+    
     registry.register(
         name="peek_file",
         description="Read the first 10-20 lines from a specific file to identify its contents.",
@@ -60,7 +60,7 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
         ),
     )
 
-                        
+    
     registry.register(
         name="inspect_dataset",
         description="Analyze columns, data types, and statistics of a CSV or Excel file in the vault.",
@@ -71,7 +71,7 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
         func=lambda file_path, subfolder="": ChartGenerator.inspect_dataset(vault, vault.relative_path(scoped_path(file_path, subfolder))),
     )
 
-                       
+    
     registry.register(
         name="generate_chart",
         description="Generate a visual chart (bar, line, scatter, pie) from CSV/Excel data and save as PNG image.",
@@ -89,7 +89,7 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
         ),
     )
 
-                             
+    
     from contextvault.generation.pdf_compiler import PDFCompiler
     registry.register(
         name="compile_pdf_artifact",
@@ -105,24 +105,24 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
         ),
     )
 
-                  
+    
     registry.register(
         name="ocr_image",
         description=(
             "Extract searchable text from a JPG, PNG, GIF, BMP, TIFF, or WEBP image. "
-            "Uses local Tesseract when available and the configured Ollama vision model as fallback."
+            "Uses local Tesseract when available; OCR is optional and does not call a language model."
         ),
         parameters={
             "file_path": {"type": "string", "description": "Relative image path inside the vault"},
             "subfolder": {"type": "string", "description": "Selected source directory boundary"},
         },
-        func=lambda file_path, subfolder="": ImageOCRParser(
-            ocr_client=services.get("llm_client")
-        ).parse(scoped_path(file_path, subfolder), "ocr-tool")
+        func=lambda file_path, subfolder="": ImageOCRParser().parse(
+            scoped_path(file_path, subfolder), "ocr-tool"
+        )
         .model_dump(),
     )
 
-                                               
+    
     filesystem_service = services.get("filesystem_retrieval_service")
     if filesystem_service:
         registry.register(
@@ -156,19 +156,19 @@ def build_default_tool_registry(vault, services) -> ToolRegistry:
             ))),
         )
 
-                              
+    
     rag_service = services.get("rag_service")
     if rag_service:
         registry.register(
             name="rag_search",
-            description="Search indexed documents using hybrid semantic and lexical retrieval.",
+            description="Search indexed documents using deterministic lexical retrieval and ranked passages.",
             parameters={
                 "query": {"type": "string", "description": "Search query or topic to find relevant passages for"},
             },
             func=lambda query: rag_service.search(query, vault.vault_id, top_k=8),
         )
 
-                           
+    
     org_service = services.get("organisation_service")
     if org_service:
         registry.register(

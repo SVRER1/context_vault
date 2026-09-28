@@ -27,6 +27,17 @@ class FileRecord(BaseModel):
     parser: Optional[str] = None
     parse_status: str = "pending"
     indexed_at: Optional[datetime] = None
+    path_key: Optional[str] = None
+    parent_path: Optional[str] = None
+    mime_type: Optional[str] = None
+    mtime_ns: Optional[int] = None
+    ctime_ns: Optional[int] = None
+    word_count: int = 0
+    document_title: Optional[str] = None
+    document_metadata_json: str = "{}"
+    extract_status: str = "pending"
+    extract_error: Optional[str] = None
+    last_seen_scan: Optional[str] = None
 
 class ChunkRecord(BaseModel):
     id: str
@@ -38,6 +49,14 @@ class ChunkRecord(BaseModel):
     page: Optional[int] = None
     section: Optional[str] = None
     heading: Optional[str] = None
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
+    slide: Optional[int] = None
+    sheet: Optional[str] = None
+    cell_range: Optional[str] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    metadata_json: str = "{}"
 
     @model_validator(mode="before")
     @classmethod
@@ -56,6 +75,10 @@ class DocumentSection(BaseModel):
     slide: Optional[int] = None
     sheet: Optional[str] = None
     cell_range: Optional[str] = None
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
     level: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -63,13 +86,13 @@ class DocumentSection(BaseModel):
     @classmethod
     def handle_aliases(cls, data: Any) -> Any:
         if isinstance(data, dict):
-                                     
+            
             if "text" not in data and "content" in data:
                 data["text"] = data["content"]
-                                      
+            
             if "heading" not in data and "title" in data:
                 data["heading"] = data["title"]
-                                                              
+            
             meta = data.get("metadata", {})
             if isinstance(meta, dict):
                 if "page" in meta and data.get("page") is None:

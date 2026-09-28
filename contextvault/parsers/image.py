@@ -32,8 +32,8 @@ class ImageOCRParser(BaseParser):
         backend = "none"
         errors: list[str] = []
 
-                                                                          
-                                                                      
+        
+        
         try:
             from PIL import Image
             import pytesseract

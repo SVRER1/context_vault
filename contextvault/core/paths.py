@@ -52,12 +52,12 @@ def is_safe_descendant(path: Path | str, vault_root: Path | str) -> bool:
         resolved_path = Path(path).resolve()
         resolved_root = Path(vault_root).resolve()
 
-                                                   
+        
         if os.name == "nt":
             resolved_path = Path(str(resolved_path).lower())
             resolved_root = Path(str(resolved_root).lower())
 
-                                                                     
+        
         resolved_path.relative_to(resolved_root)
         return True
     except (ValueError, OSError, RuntimeError):

@@ -26,13 +26,15 @@ class FilesystemRetrievalService:
 
     def __init__(self, vault: Vault, llm_client=None, config: AppConfig | None = None, ocr_client=None):
         self.vault = vault
-        self.llm_client = llm_client
+        
+        
+        self.llm_client = None
         self.config = config or get_config()
-        self.ocr_client = ocr_client if ocr_client is not None else llm_client
+        self.ocr_client = None
         self.survey_service = FilesystemSurvey(vault, config=self.config)
         self.discovery = CandidateDiscovery(vault, preview_bytes=self.config.retrieval_preview_bytes)
-        self.selector = AgentCandidateSelector(llm_client)
-        self.reader = SelectiveReader(vault, ocr_client=self.ocr_client)
+        self.selector = AgentCandidateSelector()
+        self.reader = SelectiveReader(vault, ocr_client=None)
         self.evidence_builder = EvidenceBuilder(vault, config=self.config)
 
     def retrieve(self, request: RetrievalRequest) -> EvidenceDocument:
@@ -66,8 +68,8 @@ class FilesystemRetrievalService:
                 passages.extend(self.reader.read(candidate, request))
             if passages or rounds >= request.max_rounds:
                 break
-                                                                        
-                                                                           
+            
+            
             extra_hints = tuple(self.discovery.expand_terms(request.query))
             candidates = self.discovery.discover(
                 request.query,

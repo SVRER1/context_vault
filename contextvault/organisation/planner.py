@@ -1,8 +1,6 @@
 from typing import List, Optional, Any
 from contextvault.core.models import FileRecord, OrganisationPlan
 from contextvault.core.vault import Vault
-from contextvault.core.exceptions import OrganisationError
-from contextvault.llm.client import LLMClient
 from contextvault.storage.database import Database
 from contextvault.organisation.rules import OrganisationRules
 from contextvault.organisation.deterministic import DeterministicOrganiser
@@ -16,12 +14,12 @@ class OrganisationPlanner:
         files: List[FileRecord],
         vault: Vault,
         rules: OrganisationRules,
-        llm_client: Optional[LLMClient] = None,
+        llm_client: Optional[Any] = None,
         db: Optional[Database] = None, 
         retriever: Optional[Any] = None
     ) -> OrganisationPlan:
         
-                                                        
+        
         if not files:
             from contextvault.indexing.scanner import FileScanner
             scanner = FileScanner(vault, db) if db else None
@@ -41,15 +39,15 @@ class OrganisationPlanner:
             else:
                 return DeterministicOrganiser.organise_by_extension(files, vault)
                 
-        elif rules.strategy in ('semantic', 'custom'):
-            semantic = SemanticOrganiser(llm_client, db, retriever)
-            return semantic.organise(files, vault, rules)
+        elif rules.strategy in ('semantic', 'custom') or rules.primary_grouping in ('subject', 'custom'):
             
+            
+            return SemanticOrganiser(None, db, retriever=None).organise(files, vault, rules)
+
         elif rules.strategy == 'hybrid':
             deterministic = DeterministicOrganiser()
-            semantic = SemanticOrganiser(llm_client, db, retriever)
-            hybrid = HybridOrganiser(deterministic, semantic)
-            return hybrid.organise(files, vault, rules)
+            semantic = SemanticOrganiser(None, db, retriever=None)
+            return HybridOrganiser(deterministic, semantic).organise(files, vault, rules)
             
-                                             
+        
         return DeterministicOrganiser.organise_by_extension(files, vault)

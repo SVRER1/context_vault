@@ -126,9 +126,9 @@ ALL_SCHEMAS = [
     SETTINGS_SCHEMA
 ]
 
-
-
-
+                                                                       
+                                                                          
+                                  
 CURRENT_SCHEMA_VERSION = 5
 
 MIGRATION_1_FILE_COLUMNS = {

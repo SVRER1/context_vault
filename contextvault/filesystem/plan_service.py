@@ -419,7 +419,7 @@ class PlanService:
     def _join_scope(self, scope: str | None, directory: str) -> str:
         directory, errors = self._clean_directory(directory)
         if errors:
-            
+                                                                                   
             directory = str(directory).replace("\\", "/").strip("/")
         prefix = scope.replace("\\", "/").strip("/") if scope else ""
         return f"{prefix}/{directory}" if prefix and directory else prefix or directory
@@ -443,7 +443,7 @@ class PlanService:
                 "SELECT tag FROM file_tags WHERE file_id=? ORDER BY tag_key LIMIT 1", (row["id"],)
             )
             value = tag["tag"] if tag else "Untagged"
-        else:  
+        else:               
             value = str(row["sha256"] or "unknown")[:2].upper()
         clean, issues = self._clean_directory(value)
         return clean.replace("/", "-") if clean else "Other"

@@ -63,7 +63,7 @@ class OrganisationService:
                     logger.warning(f"Could not load file record: {e}")
 
         if subfolder:
-            self.vault.scope_root(subfolder)  
+            self.vault.scope_root(subfolder)                                          
             files = [f for f in files if self.vault.is_in_scope(f.relative_path, subfolder)]
         return files
 

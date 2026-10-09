@@ -77,7 +77,7 @@ class UndoManager:
                 created_dir = self.vault.validate_path(self.vault.root_path / op.destination_path)
             except (OSError, ValueError, RuntimeError):
                 return False
-            
+                                                                     
             return created_dir.exists() and created_dir.is_dir() and not any(created_dir.iterdir())
 
         return False
@@ -94,7 +94,7 @@ class UndoManager:
             curr_dest = self.vault.root_path / op.destination_path
             orig_src = self.vault.root_path / op.source_path
             
-            
+                            
             undo_record = self.file_ops.move_file(
                 source=curr_dest,
                 dest=orig_src,
@@ -124,7 +124,7 @@ class UndoManager:
         else:
             raise UndoError(f"Unsupported operation type for undo: {op.operation_type}")
 
-        
+                                                 
         self.db.execute(
             "UPDATE operations SET undo_status = 'undone' WHERE operation_id = ?",
             (operation_id,)

@@ -72,7 +72,7 @@ class GenerationService:
             filename=filename,
         )
 
-        
+                            
         try:
             self.db.execute(
                 """INSERT INTO generated_assets 

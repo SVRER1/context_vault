@@ -43,15 +43,15 @@ class VaultService:
         if not resolved_path.is_dir():
             raise ValueError(f"Path is not a directory: {resolved_path}")
 
-        
+                                         
         vault_info = self.registry.get_or_create_vault(resolved_path)
 
-        
+                                     
         vault_data_dir = self.config.vault_data_dir(vault_info.id)
         vault_data_dir.mkdir(parents=True, exist_ok=True)
         (vault_data_dir / "cache").mkdir(exist_ok=True)
 
-        
+                                            
         vault_db = Database(vault_data_dir / "index.db")
         vault_db.initialize()
         vault_db.execute(
@@ -71,7 +71,7 @@ class VaultService:
         )
         vault_db.conn.commit()
 
-        
+                             
         vault = Vault(vault_info)
         self._active_vault = vault
 
@@ -124,7 +124,7 @@ class VaultService:
         scanner = FileScanner(vault, db)
         files = scanner.scan()
 
-        
+                                             
         vault_info = self.registry.get_vault(vault.vault_id)
         if vault_info:
             vault_info.file_count = len(files)
@@ -150,8 +150,8 @@ class VaultService:
         Returns:
             Dict with indexing statistics.
         """
-        
-        
+                                                                              
+                                                                      
         from contextvault.indexing.index_service import IndexService
 
         result = IndexService(vault, db, self.config).reconcile(

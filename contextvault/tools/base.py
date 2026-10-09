@@ -33,7 +33,7 @@ class ToolDefinition:
     """Explicit tool declaration with schema and execution callable."""
     name: str
     description: str
-    parameters: Dict[str, Any]  
+    parameters: Dict[str, Any]                             
     func: Callable[..., Any]
     required_params: List[str] = field(default_factory=list)
 

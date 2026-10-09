@@ -28,7 +28,7 @@ class VersionDetector:
                 if p1.suffix.lower() != p2.suffix.lower():
                     continue
                     
-                
+                                                                        
                 if file1.sha256 and file2.sha256 and file1.sha256 == file2.sha256:
                     continue
                     

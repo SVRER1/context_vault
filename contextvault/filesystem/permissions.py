@@ -27,16 +27,16 @@ class PermissionGate:
         root = vault.root_path
         
         if op_type == "create_directory":
-            
+                                              
             validate_vault_boundary(dest, dest, root)
             return
 
-        
+                             
         if not source.exists():
             raise FileNotFoundError(f"Source file '{source}' does not exist.")
             
         if dest.exists() and source.resolve() != dest.resolve():
             raise CollisionError(f"Destination path '{dest}' already exists. Context Vault will never overwrite existing files.")
             
-        
+                                            
         validate_vault_boundary(source, dest, root)

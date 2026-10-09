@@ -62,8 +62,8 @@ class RuleExecutor:
         diagnostics: list[str] = []
         if reconcile:
             index_stats = IndexService(self.vault, self.db, self.config).reconcile(
-                
-                
+                                                                              
+                                                                             
                 force=force_reconcile
             )
             index_run_id = index_stats.get("index_run_id")

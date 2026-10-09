@@ -7,7 +7,7 @@ from contextvault.parsers.base import BaseParser
 class PlainTextParser(BaseParser):
     """Parser for plaintext, source code, and markdown files."""
     
-    MAX_SIZE = 1024 * 1024  
+    MAX_SIZE = 1024 * 1024       
     
     def supported_extensions(self) -> set[str]:
         return {

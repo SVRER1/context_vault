@@ -22,7 +22,7 @@ class Orchestrator:
 
     def __init__(self, services: Dict[str, Any]):
         self.services = services
-        self.llm_client = None  
+        self.llm_client = None                                                       
         self.artifact_provider = services.get("artifact_provider")
         self.rag_service = services.get("rag_service")
         self.organisation_service = services.get("organisation_service")
@@ -41,19 +41,19 @@ class Orchestrator:
         lower = clean_input.lower()
 
         try:
-            
+                                                                            
             if any(w in lower for w in ["peek", "inspect directory", "inspect folder", "read 10 lines", "read 20 lines", "preview files"]):
                 return self._handle_peek(vault, subfolder=subfolder)
 
-            
+                                                                                     
             if any(w in lower for w in ["ocr", "read text from image", "extract text from image"]):
                 return self._handle_ocr(clean_input, vault, subfolder=subfolder)
 
-            
+                                                            
             if any(w in lower for w in ["chart", "plot", "graph", "visualize", "bar chart", "line chart", "pie chart"]):
                 return self._handle_chart(clean_input, vault, subfolder=subfolder)
 
-            
+                                                       
             classification = IntentRouter.classify(clean_input)
             intent = classification.intent
             params = classification.parameters or {}
@@ -77,7 +77,7 @@ class Orchestrator:
             elif intent == "status":
                 return self._handle_status(vault)
             else:
-                
+                                               
                 return self._handle_rag(clean_input, vault, subfolder=subfolder)
 
         except Exception as e:
@@ -193,9 +193,9 @@ class Orchestrator:
         """Extract data from a CSV or Excel file and generate a high-quality chart."""
         lower = user_input.lower()
 
-        
+                                        
         csv_files = list(vault.root_path.rglob("*.csv")) + list(vault.root_path.rglob("*.xlsx"))
-        
+                                 
         csv_files = [
             f for f in csv_files
             if not any(part in (".git", ".venv", ".contextvault", vault.generated_dir.name) for part in f.parts)
@@ -208,7 +208,7 @@ class Orchestrator:
                 content="No CSV or Excel dataset files found in the vault to generate charts from.",
             )
 
-        
+                                          
         target_file = csv_files[0]
         for f in csv_files:
             if f.name.lower() in lower or f.stem.lower() in lower:
@@ -217,7 +217,7 @@ class Orchestrator:
 
         rel_path = vault.relative_path(target_file)
 
-        
+                           
         chart_type = "bar"
         if "line" in lower or "trend" in lower:
             chart_type = "line"
@@ -246,7 +246,7 @@ class Orchestrator:
                 f"![{title}]({img_rel})"
             )
 
-            
+                                                                     
             if "pdf" in lower or "report" in lower:
                 pdf_info = PDFCompiler.compile_pdf(
                     vault=vault,
@@ -289,7 +289,7 @@ class Orchestrator:
         if not self.rag_service:
             return AgentResult(result_type="error", content="Search service unavailable.")
 
-        
+                              
         query = params.get("query")
         if not query or query == user_input:
             query = re.sub(r"^(?:search(?:\s+for)?|find|where(?:\s+is|\s+are)?|look\s+up)\s+", "", user_input, flags=re.IGNORECASE).strip()
@@ -446,7 +446,7 @@ class Orchestrator:
                 flags=re.IGNORECASE,
             ).strip().strip("\"'")
 
-        
+                                 
         asset = self.generation_service.generate(
             asset_type=asset_type,
             topic=topic if topic else None,
@@ -466,7 +466,7 @@ class Orchestrator:
             f"- **Markdown File**: `{asset.relative_path}`\n"
         )
 
-        
+                                            
         if "pdf" in lower or asset_type in ("study-guide", "vault-report"):
             try:
                 pdf_res = PDFCompiler.compile_pdf(

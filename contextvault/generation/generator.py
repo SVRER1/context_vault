@@ -42,9 +42,9 @@ class ContentGenerator:
     ) -> GeneratedAsset:
         query = topic if topic else "overview summary"
         
-        
-        
-        
+                                                                             
+                                                                              
+                                    
         chunks: List[SearchResult] = []
         evidence_document = None
         if self.retrieval_service is not None:
@@ -74,7 +74,7 @@ class ContentGenerator:
         else:
             context = "No relevant context found in vault."
         
-        
+                          
         asset_lower = asset_type.lower().replace("_", "-")
         count_val = count or 10
         
@@ -98,7 +98,7 @@ class ContentGenerator:
         else:
             prompt = SUMMARY_PROMPT.format(content=context)
 
-        
+                                                            
         if evidence_document is not None and not evidence_document.sufficient:
             content = (
                 f"# {asset_type.replace('-', ' ').title()}: {query}\n\n"
@@ -118,11 +118,11 @@ class ContentGenerator:
         else:
             content = f"# {asset_type.title()}: {query}\n\n_Generated without active LLM based on indexed vault material._\n\n## Summary of Retrieved Material\n\n{context}\n"
 
-        
+                      
         citation_items = evidence_document.passages if evidence_document is not None else chunks
         citations = CitationBuilder.build_citations(citation_items)
 
-        
+                             
         title = f"{asset_type.replace('-', ' ').title()}" + (f" - {topic}" if topic else "")
         out_path = self._get_output_path(self.vault, filename, asset_type)
         final_path = self.writer.write_markdown(content, out_path, title, citations)

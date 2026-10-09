@@ -81,7 +81,7 @@ class LexicalSearch:
             rows = cursor.fetchall()
             for row in rows:
                 raw_score = row["score"]
-                
+                                                                              
                 score = max(0.0, -float(raw_score))
                 rel_path = row["relative_path"]
                 fname = Path(rel_path).name

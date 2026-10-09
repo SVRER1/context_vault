@@ -59,7 +59,7 @@ class ChartGenerator:
         if not headers:
             return {"error": "No headers or data found in file", "columns": [], "row_count": 0}
 
-        
+                                   
         col_types: Dict[str, str] = {}
         summary_stats: Dict[str, Dict[str, float]] = {}
         samples: Dict[str, List[Any]] = {}
@@ -72,7 +72,7 @@ class ChartGenerator:
                 if col_idx < len(r) and r[col_idx] is not None:
                     val = r[col_idx]
                     values.append(val)
-                    
+                                             
                     try:
                         clean_num = str(val).replace(",", "").replace("$", "").replace("%", "").strip()
                         num = float(clean_num)
@@ -115,7 +115,7 @@ class ChartGenerator:
     ) -> Dict[str, Any]:
         """Generate a high-quality chart PNG using matplotlib and save into Generated/charts/."""
         import matplotlib
-        matplotlib.use("Agg")  
+        matplotlib.use("Agg")                           
         import matplotlib.pyplot as plt
 
         inspection = ChartGenerator.inspect_dataset(vault, relative_path)
@@ -125,18 +125,18 @@ class ChartGenerator:
         columns = inspection["columns"]
         col_types = inspection["column_types"]
 
-        
+                                                               
         if not x_column:
-            
+                                             
             cats = [c for c in columns if col_types.get(c) == "categorical"]
             x_column = cats[0] if cats else columns[0]
 
         if not y_column:
-            
+                                         
             nums = [c for c in columns if col_types.get(c) == "numeric"]
             y_column = nums[0] if nums else (columns[1] if len(columns) > 1 else columns[0])
 
-        
+                          
         target_path = vault.absolute_path(relative_path)
         ext = target_path.suffix.lower()
         x_vals: List[Any] = []
@@ -181,12 +181,12 @@ class ChartGenerator:
         if not y_vals:
             raise ValueError(f"No valid numeric data could be extracted for Y column '{y_column}'.")
 
-        
+                                                                        
         if len(x_vals) > 25:
             x_vals = x_vals[:25]
             y_vals = y_vals[:25]
 
-        
+                                        
         charts_dir = vault.generated_dir / "charts"
         charts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -197,12 +197,12 @@ class ChartGenerator:
 
         output_path = charts_dir / chart_name
 
-        
+                                             
         fig, ax = plt.subplots(figsize=(9, 5.5), dpi=300)
 
-        
-        primary_color = "#0284c7"  
-        accent_color = "#06b6d4"   
+                        
+        primary_color = "#0284c7"                 
+        accent_color = "#06b6d4"         
         bg_color = "#ffffff"
         grid_color = "#e2e8f0"
 
@@ -214,7 +214,7 @@ class ChartGenerator:
 
         if chart_type_lower in ("bar", "column"):
             bars = ax.bar(x_vals, y_vals, color=primary_color, edgecolor="#0369a1", width=0.6, zorder=3)
-            
+                                                                   
             if len(bars) <= 15:
                 for b in bars:
                     height = b.get_height()
@@ -233,7 +233,7 @@ class ChartGenerator:
             ax.set_xticks(range(len(x_vals)))
             ax.set_xticklabels(x_vals)
         elif chart_type_lower in ("pie", "donut"):
-            
+                                                 
             if len(x_vals) > 7:
                 pie_x = x_vals[:6] + ["Other"]
                 pie_y = y_vals[:6] + [sum(y_vals[6:])]
@@ -241,7 +241,7 @@ class ChartGenerator:
                 pie_x, pie_y = x_vals, y_vals
             ax.pie(pie_y, labels=pie_x, autopct="%1.1f%%", startangle=140, colors=["#0284c7", "#0ea5e9", "#38bdf8", "#06b6d4", "#10b981", "#6366f1", "#94a3b8"])
         else:
-            
+                            
             ax.bar(x_vals, y_vals, color=primary_color, edgecolor="#0369a1", width=0.6, zorder=3)
 
         if chart_type_lower not in ("pie", "donut"):

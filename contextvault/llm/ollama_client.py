@@ -53,17 +53,17 @@ class OllamaClient(LLMClient):
             if not available:
                 return target
 
-            
+                         
             if target in available:
                 return target
 
-            
+                                              
             target_lower = target.lower()
             for name in available:
                 if name.lower() == target_lower:
                     return name
 
-            
+                                       
             for name in available:
                 if target_lower in name.lower() or name.lower() in target_lower:
                     return name
@@ -210,13 +210,13 @@ class OllamaClient(LLMClient):
                 response.raise_for_status()
                 result_text = response.json().get("response", "{}").strip()
 
-                
+                                                                              
                 clean_json = self._extract_json_string(result_text)
                 return schema.model_validate_json(clean_json)
             except Exception as e:
                 if attempt == 1:
                     logger.warning(f"Structured generation attempt {attempt+1} failed: {e}")
-                    
+                                                                               
                     raise LLMConnectionError(f"Structured generation failed: {e}")
                 logger.debug(f"Retrying structured generation after error: {e}")
 
@@ -224,11 +224,11 @@ class OllamaClient(LLMClient):
     def _extract_json_string(text: str) -> str:
         """Extract valid JSON from raw text or markdown fences."""
         text = text.strip()
-        
+                                       
         fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
         if fence_match:
             return fence_match.group(1).strip()
-        
+                                           
         brace_match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", text)
         if brace_match:
             return brace_match.group(1).strip()
@@ -240,7 +240,7 @@ class OllamaClient(LLMClient):
             models = self.list_models()
             if not models:
                 return False
-            
+                                                                               
             req = self.requested_model.lower()
             return any(req == m.lower() or req in m.lower() or m.lower() in req for m in models)
         except Exception:

@@ -1,4 +1,4 @@
-import fitz  
+import fitz           
 from pathlib import Path
 from contextvault.core.models import ParsedDocument, DocumentSection
 from contextvault.core.exceptions import ParseError

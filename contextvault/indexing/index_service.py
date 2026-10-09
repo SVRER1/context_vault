@@ -76,8 +76,8 @@ class IndexService:
         current_keys = {rel.casefold() for rel, _path, _stat in discovered}
         missing_rows = [row for row in old_in_scope.values() if (row["path_key"] or row["relative_path"].casefold()) not in current_keys]
 
-        
-        
+                                                                           
+                                                             
         missing_by_fingerprint: dict[tuple[int, str], list[dict[str, Any]]] = {}
         for row in missing_rows:
             if row.get("sha256"):
@@ -194,8 +194,8 @@ class IndexService:
                 continue
             record = self._record(record_id, relative_path, path, stat, content_hash)
             if not content_changed:
-                
-                
+                                                                               
+                                                                      
                 with self.db.transaction():
                     self._refresh_seen_metadata(existing, relative_path, path, stat)
                     self.db.execute(
@@ -243,7 +243,7 @@ class IndexService:
                     relative_path=relative_path, filename=record.filename,
                 )
 
-        
+                                                                           
         if safe_to_prune:
             for file_id, row in available_missing.items():
                 with self.db.transaction():
@@ -323,8 +323,8 @@ class IndexService:
         )
 
     def _refresh_seen_metadata(self, row, relative_path, path, stat):
-        
-        
+                                                                           
+                                                                             
         current = self._record(row["id"], relative_path, path, stat, row["sha256"])
         self.db.execute(
             """UPDATE files SET relative_path=?, path_key=?, parent_path=?, filename=?,

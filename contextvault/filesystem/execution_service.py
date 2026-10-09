@@ -12,6 +12,7 @@ from pathlib import Path
 
 from contextvault.core.vault import Vault
 from contextvault.filesystem.plan_service import PlanService
+from contextvault.filesystem.publication import publish_no_replace
 from contextvault.indexing.fingerprint import compute_sha256
 from contextvault.storage.database import Database
 
@@ -65,7 +66,7 @@ class ExecutionService:
 
             batch_id = str(uuid.uuid4())
             now = _now()
-            
+                                                                                     
             with self.db.transaction():
                 self.db.execute(
                     "INSERT INTO operation_batches_v3(batch_id,plan_id,vault_id,status,created_at,updated_at) VALUES(?,?,?,'prepared',?,?)",
@@ -154,7 +155,7 @@ class ExecutionService:
         if item.action == "rename" and item.source.casefold() == item.destination.casefold():
             self._execute_case_only_rename(batch_id, item_id, item, source, destination)
             return
-        
+                                                                                
         if destination.exists() or destination.is_symlink():
             raise FileExistsError(f"Destination appeared during commit: {item.destination}")
         if compute_sha256(source) != item.source_fingerprint.sha256:
@@ -170,9 +171,7 @@ class ExecutionService:
             if compute_sha256(temp) != item.source_fingerprint.sha256:
                 raise IOError("Temporary copy checksum did not match the reviewed source.")
             self._set_item(item_id, "destination_verified", after_hash=item.source_fingerprint.sha256)
-            
-            os.link(temp, destination)
-            temp.unlink()
+            publish_no_replace(temp, destination)
             if item.action != "copy":
                 if compute_sha256(source) != item.source_fingerprint.sha256:
                     raise StaleOperationPlanError("Source changed after destination publication; source was retained.")
@@ -182,7 +181,7 @@ class ExecutionService:
             self._set_item(item_id, "committed", index_applied=True,
                            result_file_id=result_file_id)
         finally:
-            
+                                                                                             
             if temp.exists():
                 try:
                     temp.unlink()
@@ -199,9 +198,7 @@ class ExecutionService:
         os.rename(source, intermediate)
         self._set_item(item_id, "source_staged")
         try:
-            
-            os.link(intermediate, destination)
-            intermediate.unlink()
+            publish_no_replace(intermediate, destination)
         except Exception:
             if intermediate.exists() and not source.exists() and not destination.exists():
                 os.rename(intermediate, source)
@@ -219,7 +216,7 @@ class ExecutionService:
         stat = destination.stat()
         with self.db.transaction():
             if item.action == "copy":
-                
+                                                                                              
                 self.db.execute("UPDATE files SET last_seen_scan=NULL WHERE id=?", (item.file_id,))
             else:
                 self.db.execute(
@@ -256,7 +253,7 @@ class ExecutionService:
             self._journal_directory(path)
 
     def _journal_directory(self, path: Path) -> None:
-        
+                                                                                        
         now = _now()
         self.db.execute(
             "INSERT INTO operations(operation_id,timestamp,vault_id,operation_type,source_path,destination_path,hash_before,hash_after,status,reason,user_approved,batch_id,undo_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",

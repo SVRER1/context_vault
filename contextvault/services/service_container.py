@@ -25,15 +25,15 @@ class ServiceContainer:
 
     def __init__(self, config: AppConfig | None = None):
         self._config = config or get_config()
-        
-        
-        
+                                                                           
+                                                                           
+                                                            
         self.database_lock = threading.RLock()
 
-        
+                         
         self._app_db: Database | None = None
         self._vault_service: Any = None
-        
+                            
         self._vault: Vault | None = None
         self._vault_db: Database | None = None
         self._filesystem_retrieval_service: Any = None
@@ -318,7 +318,7 @@ class ServiceContainer:
         self._tag_service = None
         self._orchestrator = None
         self.recovery_on_open = []
-        
+                                                         
 
     @property
     def has_llm(self) -> bool:

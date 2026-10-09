@@ -25,19 +25,19 @@ class SemanticOrganiser:
     def classify_file(self, file_record: FileRecord, vault: Vault, rules: Optional[OrganisationRules] = None) -> ClassificationResult:
         file_path = vault.root_path / file_record.relative_path
         
-        
+                                                                        
         peek_res = ShallowPeeker.peek_file(file_path, max_lines=15)
         content_sample = peek_res.get("preview", "")
 
         custom_param = rules.custom_parameter if rules else None
 
         if not self.llm_client or not self.llm_client.is_available():
-            
+                                                                     
             fname = file_record.filename.lower()
             prev_lower = content_sample.lower()
             
             if custom_param:
-                
+                                                                                 
                 for cat_candidate in re.split(r"[,;|\n]", custom_param):
                     c_clean = cat_candidate.strip().lower()
                     if c_clean and (c_clean in fname or c_clean in prev_lower):
@@ -91,7 +91,7 @@ class SemanticOrganiser:
             if match:
                 data = json.loads(match.group())
                 raw_cat = data.get("category", "General")
-                
+                                            
                 clean_cat = re.sub(r'[\\/*?:"<>|]', "", str(raw_cat)).strip().title() or "General"
                 return ClassificationResult(
                     category=clean_cat,

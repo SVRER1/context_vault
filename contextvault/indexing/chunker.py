@@ -32,7 +32,7 @@ class DocumentChunker:
         chunk_index = 0
         rel_path = relative_path or doc.path
 
-        
+                                               
         if not doc.sections:
             if doc.text:
                 chunks.extend(self._split_text(
@@ -54,7 +54,7 @@ class DocumentChunker:
             section_tokens = self._estimate_tokens(section_text)
 
             if section_tokens <= target_tokens + overlap_tokens:
-                
+                                   
                 chunk = ChunkRecord(
                     id=str(uuid.uuid4()),
                     file_id=doc.file_id,
@@ -77,7 +77,7 @@ class DocumentChunker:
                 chunks.append(chunk)
                 chunk_index += 1
             else:
-                
+                                                  
                 section_chunks = self._split_text(
                     text=section_text,
                     file_id=doc.file_id,
@@ -160,7 +160,7 @@ class DocumentChunker:
                 ))
                 chunk_idx += 1
                 
-                
+                         
                 words = current_chunk_text.split()
                 overlap_words = int(overlap_tokens / 1.3)
                 overlap_text = " ".join(words[-overlap_words:]) if overlap_words > 0 else ""

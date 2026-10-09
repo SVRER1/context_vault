@@ -26,8 +26,8 @@ class FilesystemRetrievalService:
 
     def __init__(self, vault: Vault, llm_client=None, config: AppConfig | None = None, ocr_client=None):
         self.vault = vault
-        
-        
+                                                                             
+                                                                  
         self.llm_client = None
         self.config = config or get_config()
         self.ocr_client = None
@@ -68,8 +68,8 @@ class FilesystemRetrievalService:
                 passages.extend(self.reader.read(candidate, request))
             if passages or rounds >= request.max_rounds:
                 break
-            
-            
+                                                                        
+                                                                           
             extra_hints = tuple(self.discovery.expand_terms(request.query))
             candidates = self.discovery.discover(
                 request.query,

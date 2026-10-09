@@ -19,7 +19,7 @@ class OrganisationPlanner:
         retriever: Optional[Any] = None
     ) -> OrganisationPlan:
         
-        
+                                                        
         if not files:
             from contextvault.indexing.scanner import FileScanner
             scanner = FileScanner(vault, db) if db else None
@@ -40,8 +40,8 @@ class OrganisationPlanner:
                 return DeterministicOrganiser.organise_by_extension(files, vault)
                 
         elif rules.strategy in ('semantic', 'custom') or rules.primary_grouping in ('subject', 'custom'):
-            
-            
+                                                                           
+                                                                         
             return SemanticOrganiser(None, db, retriever=None).organise(files, vault, rules)
 
         elif rules.strategy == 'hybrid':
@@ -49,5 +49,5 @@ class OrganisationPlanner:
             semantic = SemanticOrganiser(None, db, retriever=None)
             return HybridOrganiser(deterministic, semantic).organise(files, vault, rules)
             
-        
+                                             
         return DeterministicOrganiser.organise_by_extension(files, vault)

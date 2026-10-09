@@ -7,7 +7,7 @@ class AgentCandidateSelector:
     """Select the highest-ranked candidates without a generative dependency."""
 
     def __init__(self, llm_client=None):
-        
+                                                                                         
         self._legacy_argument_ignored = llm_client is not None
 
     def select(self, request: RetrievalRequest, candidates: list[CandidateFile]) -> list[CandidateFile]:

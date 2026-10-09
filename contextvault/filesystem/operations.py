@@ -40,19 +40,19 @@ class FileOperations:
 
         PermissionGate.validate_operation("move", source, dest, vault)
         
-        
+                             
         source_hash = compute_sha256(source)
         
-        
+                                           
         dest.parent.mkdir(parents=True, exist_ok=True)
         
-        
+                         
         shutil.move(str(source), str(dest))
         
-        
+                                   
         after_hash = compute_sha256(dest)
         if after_hash != source_hash:
-            
+                                            
             try:
                 shutil.move(str(dest), str(source))
             except Exception:

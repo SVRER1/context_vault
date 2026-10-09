@@ -3,10 +3,10 @@ from typing import Optional
 
 class OrganisationRules(BaseModel):
     """Configuration for organisation plans."""
-    strategy: str  
-    primary_grouping: str  
+    strategy: str                                         
+    primary_grouping: str                                                                                      
     secondary_grouping: Optional[str] = None
-    custom_parameter: Optional[str] = None  
+    custom_parameter: Optional[str] = None                                                 
     max_depth: int = 2
     preserve_existing: bool = True
     rename_files: bool = False

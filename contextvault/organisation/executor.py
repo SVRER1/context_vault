@@ -26,7 +26,7 @@ class OrganisationExecutor:
         completed_operations: List[OperationRecord] = []
         batch_id = str(uuid.uuid4())
         
-        
+                                            
         for rel_dir in plan.directories_to_create:
             dir_path = self.vault.root_path / rel_dir
             try:
@@ -40,7 +40,7 @@ class OrganisationExecutor:
             except Exception as e:
                 logger.warning(f"Directory creation note for '{rel_dir}': {e}")
                 
-        
+                                            
         for planned_op in plan.operations:
             src_path = self.vault.root_path / planned_op.source
             if not planned_op.destination:
@@ -63,7 +63,7 @@ class OrganisationExecutor:
                 completed_operations.append(op_record)
             except Exception as e:
                 logger.error(f"Failed to move '{src_path}' to '{dst_path}': {e}")
-                
+                                                                                     
                 break
                 
         return completed_operations

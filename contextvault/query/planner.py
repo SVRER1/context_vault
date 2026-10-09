@@ -117,8 +117,8 @@ class QueryPlanner:
             file_id for file_id in universe
             if rows_by_id[file_id].get("extract_status") not in {"ok", "empty"}
         }
-        
-        
+                                                                              
+                                                                           
         unknown = incomplete - matches
         return PredicateTruth(frozenset(matches), frozenset(unknown))
 

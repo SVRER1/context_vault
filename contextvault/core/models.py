@@ -86,13 +86,13 @@ class DocumentSection(BaseModel):
     @classmethod
     def handle_aliases(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            
+                                     
             if "text" not in data and "content" in data:
                 data["text"] = data["content"]
-            
+                                      
             if "heading" not in data and "title" in data:
                 data["heading"] = data["title"]
-            
+                                                              
             meta = data.get("metadata", {})
             if isinstance(meta, dict):
                 if "page" in meta and data.get("page") is None:

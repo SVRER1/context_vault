@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from contextvault.core.vault import Vault
 from contextvault.filesystem.execution_service import ExecutionService, _now
+from contextvault.filesystem.publication import publish_no_replace
 from contextvault.indexing.fingerprint import compute_sha256
 from contextvault.storage.database import Database
 
@@ -151,9 +152,7 @@ class RecoveryService:
                     destination = self.vault.root_path / item.destination
                     temp_path = self.vault.root_path / row["temp_path"] if row.get("temp_path") else None
                     if item.action == "rename" and not destination.exists() and temp_path and temp_path.exists():
-                        import os
-                        os.link(temp_path, destination)
-                        temp_path.unlink()
+                        publish_no_replace(temp_path, destination)
                         if compute_sha256(destination) != item.source_fingerprint.sha256:
                             raise RuntimeError("Recovered case-rename destination failed its hash check.")
                     self.executor._update_index(item, destination)

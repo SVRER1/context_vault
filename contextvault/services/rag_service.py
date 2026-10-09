@@ -21,7 +21,7 @@ class RAGService:
 
     def __init__(
         self,
-        retriever: Any = None,  
+        retriever: Any = None,                                                 
         llm_client: Any = None,
         vault: Vault | None = None,
         retrieval_service: FilesystemRetrievalService | None = None,

@@ -60,7 +60,7 @@ class PDFCompiler:
 
         styles = getSampleStyleSheet()
 
-        
+                                  
         title_style = ParagraphStyle(
             "DocTitle",
             parent=styles["Heading1"],
@@ -117,13 +117,13 @@ class PDFCompiler:
 
         story = []
 
-        
+                   
         story.append(Paragraph(title, title_style))
         time_str = datetime.now().strftime("%B %d, %Y")
         story.append(Paragraph(f"Context Vault Intelligence Report • Generated on {time_str} via the configured local Ollama model", subtitle_style))
         story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=14))
 
-        
+                                          
         lines = content_markdown.splitlines()
         for raw_line in lines:
             line = raw_line.strip()
@@ -131,7 +131,7 @@ class PDFCompiler:
                 story.append(Spacer(1, 4))
                 continue
 
-            
+                                                
             if line.startswith("# ") and title.lower() in line.lower():
                 continue
 
@@ -154,7 +154,7 @@ class PDFCompiler:
                 p_text = cls._format_inline_markdown(line)
                 story.append(Paragraph(p_text, body_style))
 
-        
+                                              
         if tables_data:
             for table_matrix in tables_data:
                 if not table_matrix or not table_matrix[0]:
@@ -162,7 +162,7 @@ class PDFCompiler:
                 story.append(Spacer(1, 10))
                 story.append(Paragraph("Data Summary Table", h2_style))
                 
-                
+                                        
                 formatted_matrix = []
                 for row_idx, row in enumerate(table_matrix):
                     row_cells = []
@@ -194,7 +194,7 @@ class PDFCompiler:
                 story.append(t)
                 story.append(Spacer(1, 10))
 
-        
+                                   
         if charts:
             for chart_rel in charts:
                 chart_path = vault.root_path / chart_rel if not Path(chart_rel).is_absolute() else Path(chart_rel)
@@ -207,7 +207,7 @@ class PDFCompiler:
                         Spacer(1, 8),
                     ]))
 
-        
+                              
         if citations:
             story.append(Spacer(1, 14))
             story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=10))
@@ -218,7 +218,7 @@ class PDFCompiler:
                 cite_text = f"<b>[{i}]</b> {src.file_path}{page_part}{head_part}"
                 story.append(Paragraph(cite_text, subtitle_style))
 
-        
+                   
         doc.build(story)
         logger.info(f"Compiled PDF successfully: {pdf_path}")
 
@@ -232,10 +232,10 @@ class PDFCompiler:
     @staticmethod
     def _format_inline_markdown(text: str) -> str:
         """Convert basic markdown bold/italics/code to ReportLab HTML tags."""
-        
+                                                            
         text = re.sub(r"`([^`]+)`", r'<font name="Courier" color="#0369a1">\1</font>', text)
-        
+                                         
         text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
-        
+                                           
         text = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", text)
         return text

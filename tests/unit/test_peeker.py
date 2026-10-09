@@ -8,7 +8,7 @@ from contextvault.core.models import VaultInfo
 
 @pytest.fixture
 def sample_vault(tmp_path):
-    
+                                       
     long_file = tmp_path / "long_notes.txt"
     long_file.write_text("\n".join(f"Line {i}: Some content here" for i in range(1, 100)), encoding="utf-8")
 
@@ -30,13 +30,13 @@ def sample_vault(tmp_path):
 def test_peek_file_enforces_line_clamp(sample_vault):
     long_file = sample_vault.root_path / "long_notes.txt"
     
-    
+                                           
     peek_res = ShallowPeeker.peek_file(long_file, max_lines=50)
     assert peek_res["line_count"] == 20
     assert "Line 20" in peek_res["preview"]
     assert "Line 21" not in peek_res["preview"]
 
-    
+                                          
     peek_min = ShallowPeeker.peek_file(long_file, max_lines=3)
     assert peek_min["line_count"] == 10
 

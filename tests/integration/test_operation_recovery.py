@@ -43,13 +43,13 @@ def test_commit_time_destination_race_never_overwrites(tmp_path, monkeypatch):
     source = root / "Docs" / "one.txt"
     plan = make_plan(root, vault, db)
     destination = root / "Sorted" / "one.txt"
-    original_link = execution_module.os.link
+    original_publish = execution_module.publish_no_replace
 
-    def race_link(src, dst):
+    def race_publish(src, dst):
         destination.write_bytes(b"unrelated destination bytes")
-        return original_link(src, dst)
+        return original_publish(src, dst)
 
-    monkeypatch.setattr(execution_module.os, "link", race_link)
+    monkeypatch.setattr(execution_module, "publish_no_replace", race_publish)
     result = ExecutionService(vault, db).commit(plan.plan_id, plan.digest, approved=True)
     assert result.status == "needs_recovery"
     assert source.read_bytes() == b"reliable bytes"
@@ -167,7 +167,7 @@ def test_interrupted_case_rename_is_classified_and_recovered(tmp_path, monkeypat
     source = root / "Docs" / "Topic.txt"
     source.write_text("same bytes", encoding="utf-8")
     plan = PlanService(vault, db).preview_rename("Docs/Topic.txt", "topic.txt")
-    monkeypatch.setattr(execution_module.os, "link", lambda *_: (_ for _ in ()).throw(InjectedCrash()))
+    monkeypatch.setattr(execution_module, "publish_no_replace", lambda *_: (_ for _ in ()).throw(InjectedCrash()))
     with pytest.raises(InjectedCrash):
         ExecutionService(vault, db).commit(plan.plan_id, plan.digest, approved=True)
 

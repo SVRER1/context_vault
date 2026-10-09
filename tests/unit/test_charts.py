@@ -53,7 +53,7 @@ def test_generate_bar_chart(data_vault):
     
     img_path = Path(chart_info["image_absolute_path"])
     assert img_path.exists()
-    assert img_path.stat().st_size > 5000  
+    assert img_path.stat().st_size > 5000                 
 
 def test_generate_line_chart(data_vault):
     chart_info = ChartGenerator.generate_chart(

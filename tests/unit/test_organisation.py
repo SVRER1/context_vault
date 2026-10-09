@@ -9,7 +9,7 @@ def test_deterministic_by_extension(tmp_path):
     vault_dir = tmp_path / "v"
     vault_dir.mkdir()
     
-    
+                         
     (vault_dir / "doc.pdf").touch()
     (vault_dir / "notes.txt").touch()
     (vault_dir / "script.py").touch()

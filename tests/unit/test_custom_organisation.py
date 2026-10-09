@@ -11,7 +11,7 @@ from contextvault.organisation.semantic import SemanticOrganiser
 
 @pytest.fixture
 def custom_vault(tmp_path):
-    
+                         
     (tmp_path / "calculus_hw.txt").write_text("Calculus derivatives and integrals\n", encoding="utf-8")
     (tmp_path / "algorithm_lab.py").write_text("def quicksort(arr): return arr\n", encoding="utf-8")
     (tmp_path / "quantum_mechanics.pdf").write_text("Schrodinger wave equation\n", encoding="utf-8")
@@ -51,11 +51,11 @@ def test_custom_parameter_division_creates_target_directories(custom_vault):
     planner = OrganisationPlanner()
     plan = planner.create_plan(files=files, vault=custom_vault, rules=rules)
 
-    
+                                        
     assert len(plan.directories_to_create) > 0
     assert len(plan.operations) > 0
 
-    
+                                                        
     destinations = [op.destination for op in plan.operations]
     assert any("/calculus_hw.txt" in d for d in destinations)
     assert any("/algorithm_lab.py" in d for d in destinations)

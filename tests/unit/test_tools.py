@@ -35,7 +35,7 @@ def test_tool_registry_registration_and_execution(test_vault):
     assert reg.get("compile_pdf_artifact") is not None
     assert reg.get("ocr_image") is not None
     
-    
+                       
     res = reg.execute("peek_file", {"file_path": "notes.txt", "max_lines": 15})
     assert res.success is True
     assert res.data["line_count"] == 3

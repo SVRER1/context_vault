@@ -25,7 +25,7 @@ def pdf_vault(tmp_path):
     return Vault(info)
 
 def test_compile_pdf_with_charts_and_tables(pdf_vault):
-    
+                         
     chart_info = ChartGenerator.generate_chart(
         pdf_vault,
         relative_path="metrics.csv",
@@ -35,7 +35,7 @@ def test_compile_pdf_with_charts_and_tables(pdf_vault):
         title="User Growth",
     )
     
-    
+                    
     markdown = """## Executive Summary
 This document provides a summary of annual user growth metrics.
 
@@ -63,9 +63,9 @@ This document provides a summary of annual user growth metrics.
 
     pdf_file = Path(result["absolute_path"])
     assert pdf_file.exists()
-    assert pdf_file.stat().st_size > 5000  
+    assert pdf_file.stat().st_size > 5000                    
     
-    
+                                        
     with open(pdf_file, "rb") as f:
         header = f.read(5)
         assert header == b"%PDF-"

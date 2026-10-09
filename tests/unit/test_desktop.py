@@ -11,7 +11,7 @@ from desktop.pages.generate_page import GeneratePage
 from desktop.pages.audit_page import AuditPage
 from desktop.pages.settings_page import SettingsPage
 
-
+                                                  
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 @pytest.fixture(scope="session")

@@ -49,7 +49,7 @@ def test_move_verification_hash_preservation(test_vault):
     assert record.hash_before == hash_after
     assert record.status == "completed"
     
-    
+                        
     ops = db.fetch_all("SELECT * FROM operations WHERE vault_id = ?", (vault.vault_id,))
     assert len(ops) == 1
     assert ops[0]["operation_type"] == "move"

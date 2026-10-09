@@ -19,7 +19,7 @@ def test_parent_escape_rejected(tmp_path):
     vault = tmp_path / "vault"
     vault.mkdir()
     
-    
+                          
     outside = vault / ".." / "secret.txt"
     assert is_safe_descendant(outside, vault) is False
     with pytest.raises(PathSecurityError):
@@ -37,7 +37,7 @@ def test_absolute_external_path_rejected(tmp_path):
         resolve_path(external, vault)
 
 def test_prefix_trick_rejected(tmp_path):
-    
+                                 
     vault = tmp_path / "vault"
     vault.mkdir()
     similar = tmp_path / "vault-extra"

@@ -17,7 +17,7 @@ class OrganisePage(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
         
-        
+                       
         header = QLabel("Vault Organisation & Directory Division")
         font = header.font()
         font.setPointSize(14)
@@ -29,7 +29,7 @@ class OrganisePage(QWidget):
         subtitle.setStyleSheet("color: #94a3b8; font-size: 11px;")
         layout.addWidget(subtitle)
         
-        
+                        
         controls_frame = QFrame()
         controls_frame.setStyleSheet("background-color: #1e293b; border-radius: 8px; padding: 10px;")
         form_layout = QFormLayout(controls_frame)
@@ -48,7 +48,7 @@ class OrganisePage(QWidget):
         self.primary_combo.currentIndexChanged.connect(self.on_division_changed)
         form_layout.addRow("Parameter of Division:", self.primary_combo)
         
-        
+                                                                
         self.custom_input = QLineEdit()
         self.custom_input.setPlaceholderText("e.g. Divide by course: CS101, Math, Physics | or by project: Alpha, Beta")
         self.custom_input.setVisible(False)
@@ -70,12 +70,12 @@ class OrganisePage(QWidget):
         
         layout.addWidget(controls_frame)
         
-        
+                        
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("color: #38bdf8; font-style: italic;")
         layout.addWidget(self.status_label)
         
-        
+                      
         self.preview_tree = QTreeWidget()
         self.preview_tree.setHeaderLabels(["Proposed Vault Directory Structure", "Action", "Details / Reason"])
         self.preview_tree.setStyleSheet("""
@@ -97,7 +97,7 @@ class OrganisePage(QWidget):
         """)
         layout.addWidget(self.preview_tree)
         
-        
+                           
         action_layout = QHBoxLayout()
         self.summary_label = QLabel("Summary: 0 files to move, 0 directories to create")
         self.summary_label.setStyleSheet("color: #94a3b8; font-weight: bold;")

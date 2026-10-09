@@ -47,7 +47,11 @@ class IndexWorker(BaseWorker):
             pct = int((cur / tot) * 100) if tot > 0 else 0
             self.progress.emit(pct, 100, msg or "Indexing...")
 
-        result = self.service_container.index_service.reconcile(progress_callback=on_prog)
+        result = self.service_container.vault_service.index_vault(
+            vault,
+            self.service_container.vault_db,
+            progress_callback=on_prog,
+        )
         self.progress.emit(100, 100, "Indexing complete.")
         return result
 

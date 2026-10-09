@@ -12,7 +12,7 @@ class DuplicatesPage(QWidget):
         
         layout = QVBoxLayout(self)
         
-        
+                         
         self.detect_btn = QPushButton("Detect Duplicates")
         self.detect_btn.clicked.connect(self.detect_duplicates)
         layout.addWidget(self.detect_btn)
@@ -20,12 +20,12 @@ class DuplicatesPage(QWidget):
         self.status_label = QLabel("")
         layout.addWidget(self.status_label)
         
-        
+                                
         layout.addWidget(QLabel("Exact Duplicates (Grouped by Hash)"))
         self.exact_table = self.create_table()
         layout.addWidget(self.exact_table)
         
-        
+                                 
         layout.addWidget(QLabel("Possible Versions (Grouped by Similarity)"))
         self.versions_table = self.create_table()
         layout.addWidget(self.versions_table)
@@ -60,7 +60,7 @@ class DuplicatesPage(QWidget):
         action = menu.exec(table.viewport().mapToGlobal(pos))
         if action == reveal_action:
             if os.path.exists(path):
-                
+                                       
                 subprocess.Popen(rf'explorer /select,"{path}"')
             else:
                 QMessageBox.warning(self, "Error", "File no longer exists.")

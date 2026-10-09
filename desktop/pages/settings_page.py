@@ -18,7 +18,7 @@ class SettingsPage(QWidget):
         self.ollama_url.setText(config.ollama_base_url)
         form_layout.addRow("Ollama Server URL:", self.ollama_url)
         
-        
+                                                 
         model_layout = QHBoxLayout()
         self.llm_model_combo = QComboBox()
         self.llm_model_combo.setEditable(True)
@@ -43,7 +43,7 @@ class SettingsPage(QWidget):
         self.output_folder.setText(config.generated_output_folder)
         form_layout.addRow("Generated Output Folder:", self.output_folder)
         
-        
+                 
         btn_layout = QHBoxLayout()
         self.test_btn = QPushButton("Test Ollama Connection")
         self.test_btn.clicked.connect(self.test_connection)
@@ -76,7 +76,7 @@ class SettingsPage(QWidget):
 
         self.llm_model_combo.clear()
         
-        
+                                                                  
         preferred = "gemma4:e2b"
             
         if models:
@@ -84,7 +84,7 @@ class SettingsPage(QWidget):
                 label = f"{m} (Recommended)" if m.lower() == preferred.lower() else m
                 self.llm_model_combo.addItem(label, userData=m)
             
-            
+                                         
             idx = -1
             for i in range(self.llm_model_combo.count()):
                 data = self.llm_model_combo.itemData(i)
@@ -127,7 +127,7 @@ class SettingsPage(QWidget):
             config.ollama_base_url = self.ollama_url.text().strip()
             
             selected_model = self.llm_model_combo.currentData() or self.llm_model_combo.currentText().strip()
-            
+                                                      
             selected_model = selected_model.replace(" (Recommended)", "").strip()
             config.ollama_model = selected_model
             
@@ -136,7 +136,7 @@ class SettingsPage(QWidget):
             config.generated_output_folder = self.output_folder.text().strip()
             config.save()
             
-            
+                                                           
             if hasattr(self.app_context.service_container, "_llm_client"):
                 client = self.app_context.service_container._llm_client
                 if client:

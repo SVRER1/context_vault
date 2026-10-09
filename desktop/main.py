@@ -6,7 +6,7 @@ from PySide6.QtGui import QIcon
 from desktop.app import ContextVaultApp
 
 def main():
-    
+                                                                            
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ContextVault.Workspace.1.0")
     except Exception:
@@ -16,7 +16,7 @@ def main():
     app.setApplicationName('Context Vault')
     app.setOrganizationName('ContextVault')
 
-    
+                            
     icon_path = Path(__file__).resolve().parent.parent / "assets" / "icon.png"
     if icon_path.exists():
         app_icon = QIcon(str(icon_path))

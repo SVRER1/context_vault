@@ -24,7 +24,7 @@ class MessageBubble(QFrame):
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(4)
         
-        
+                       
         sender_lbl = QLabel(sender)
         s_font = sender_lbl.font()
         s_font.setBold(True)
@@ -52,7 +52,7 @@ class MessageBubble(QFrame):
             
         layout.addWidget(sender_lbl)
         
-        
+                         
         self.browser = QTextBrowser()
         self.browser.setOpenExternalLinks(False)
         self.browser.setMarkdown(text)
@@ -68,7 +68,7 @@ class MessageBubble(QFrame):
         self.browser.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.browser.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
-        
+                               
         self.browser.document().setTextWidth(600)
         doc_height = self.browser.document().size().height()
         self.browser.setFixedHeight(max(24, int(doc_height) + 10))
@@ -87,17 +87,17 @@ class ChatPage(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(10)
         
-        
+                                          
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(self.splitter)
         
-        
+                                           
         chat_container = QWidget()
         chat_vlayout = QVBoxLayout(chat_container)
         chat_vlayout.setContentsMargins(0, 0, 0, 0)
         chat_vlayout.setSpacing(8)
         
-        
+                                                     
         top_bar = QHBoxLayout()
         top_bar.setSpacing(8)
         
@@ -142,7 +142,7 @@ class ChatPage(QWidget):
         
         chat_vlayout.addLayout(top_bar)
         
-        
+                          
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("QScrollArea { border: 1px solid #334155; border-radius: 8px; background-color: #0f172a; }")
@@ -155,13 +155,13 @@ class ChatPage(QWidget):
         self.scroll_area.setWidget(self.chat_inner)
         chat_vlayout.addWidget(self.scroll_area)
         
-        
+                           
         self.loading_label = QLabel("Processing with the configured local Ollama model...")
         self.loading_label.setStyleSheet("color: #38bdf8; font-style: italic; font-size: 11px;")
         self.loading_label.setVisible(False)
         chat_vlayout.addWidget(self.loading_label)
         
-        
+                            
         chips_layout = QHBoxLayout()
         chips_layout.setSpacing(6)
         chips = [
@@ -194,7 +194,7 @@ class ChatPage(QWidget):
         chips_layout.addStretch()
         chat_vlayout.addLayout(chips_layout)
         
-        
+                    
         input_layout = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Ask a question, request directory division, search, or generate artifacts...")
@@ -235,7 +235,7 @@ class ChatPage(QWidget):
         
         self.splitter.addWidget(chat_container)
         
-        
+                                                             
         self.studio_panel = QFrame()
         self.studio_panel.setFixedWidth(380)
         self.studio_panel.setStyleSheet("background-color: #1e293b; border-radius: 8px; border: 1px solid #334155;")
@@ -258,7 +258,7 @@ class ChatPage(QWidget):
             QTabBar::tab:selected { background: #0284c7; color: white; font-weight: bold; }
         """)
         
-        
+                                 
         doc_tab = QWidget()
         doc_layout = QVBoxLayout(doc_tab)
         doc_layout.setContentsMargins(8, 8, 8, 8)
@@ -296,7 +296,7 @@ class ChatPage(QWidget):
         
         self.studio_tabs.addTab(doc_tab, "Documents")
         
-        
+                              
         chart_tab = QWidget()
         chart_layout = QVBoxLayout(chart_tab)
         chart_layout.setContentsMargins(8, 8, 8, 8)
@@ -332,7 +332,7 @@ class ChatPage(QWidget):
         
         self.studio_tabs.addTab(chart_tab, "Charts")
         
-        
+                                 
         recent_tab = QWidget()
         recent_layout = QVBoxLayout(recent_tab)
         recent_layout.setContentsMargins(8, 8, 8, 8)
@@ -390,7 +390,7 @@ class ChatPage(QWidget):
         except Exception:
             pass
             
-        
+                                     
         idx = self.scope_combo.findText(cur)
         if idx >= 0:
             self.scope_combo.setCurrentIndex(idx)
@@ -472,7 +472,7 @@ class ChatPage(QWidget):
 
         self.add_message("Context Vault", text, is_user=False)
 
-        
+                                                                             
         if result_type == "organisation_plan" and plan and plan.items:
             self._render_interactive_plan_card(plan)
 
@@ -565,7 +565,7 @@ class ChatPage(QWidget):
         else:
             QMessageBox.warning(self, "File Not Found", f"Cannot find referenced file:\n{path}")
 
-    
+                                  
     def generate_document_artifact(self):
         vault = self.app_context.service_container.vault
         if not vault:

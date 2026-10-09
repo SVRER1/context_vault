@@ -21,12 +21,12 @@ class GeneratePage(QWidget):
         
         self.tabs = QTabWidget()
         
-        
+                                                                   
         self.doc_tab = QWidget()
         self._build_doc_tab()
         self.tabs.addTab(self.doc_tab, "Knowledge Artifacts & PDFs")
         
-        
+                                        
         self.chart_tab = QWidget()
         self._build_chart_tab()
         self.tabs.addTab(self.chart_tab, "Visual Charts & Graphs")
@@ -161,7 +161,7 @@ class GeneratePage(QWidget):
         scope_text = self.app_context.active_subfolder or "Entire Vault"
         info_md = f"### Asset Created: `{rel_p}`\n- **Source scope**: `{scope_text}`\n"
         
-        
+                                  
         if self.pdf_cb.isChecked() and vault and abs_p.exists():
             try:
                 pdf_res = PDFCompiler.compile_pdf(

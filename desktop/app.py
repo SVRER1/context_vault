@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QSize
 from contextvault.services.service_container import ServiceContainer
 from desktop.workers import IndexWorker
 
-
+              
 from desktop.pages.welcome_page import WelcomePage
 from desktop.pages.chat_page import ChatPage
 from desktop.pages.search_page import SearchPage
@@ -32,7 +32,7 @@ class ContextVaultApp(QMainWindow):
         self.setWindowTitle("Context Vault")
         self.resize(1240, 820)
         
-        
+                                                  
         self.setStyleSheet("""
             QWidget {
                 background-color: #0f172a;
@@ -83,17 +83,17 @@ class ContextVaultApp(QMainWindow):
         self.main_layout = QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         
-        
+                     
         self.stacked_widget = QStackedWidget()
         
-        
+                                                      
         self.welcome_page = WelcomePage(self.app_context)
         self.welcome_page.vault_selected.connect(self.open_vault)
         
         self.stacked_widget.addWidget(self.welcome_page)
         self.main_layout.addWidget(self.stacked_widget)
         
-        
+                                             
         self.vault_ui_container = QWidget()
         self.vault_layout = QHBoxLayout(self.vault_ui_container)
         self.vault_layout.setContentsMargins(0, 0, 0, 0)
@@ -107,7 +107,7 @@ class ContextVaultApp(QMainWindow):
         
         self.stacked_widget.addWidget(self.vault_ui_container)
         
-        
+                          
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.vault_info_label = QLabel("No Vault Loaded")
@@ -115,7 +115,7 @@ class ContextVaultApp(QMainWindow):
         self.status_bar.addPermanentWidget(self.vault_info_label)
         self.status_bar.addPermanentWidget(self.llm_status_label)
         
-        
+                     
         self.show_welcome_screen()
 
     def setup_sidebar(self):
@@ -126,7 +126,7 @@ class ContextVaultApp(QMainWindow):
         sidebar_layout = QVBoxLayout(self.sidebar_widget)
         sidebar_layout.setContentsMargins(12, 20, 12, 20)
         
-        
+                           
         self.sidebar_vault_name = QLabel("Vault Name")
         font = self.sidebar_vault_name.font()
         font.setBold(True)
@@ -139,11 +139,11 @@ class ContextVaultApp(QMainWindow):
         self.sidebar_file_count = QLabel("0 files (filesystem retrieval ready)")
         self.sidebar_file_count.setStyleSheet("color: #cbd5e1; font-size: 11px;")
         
-        
+                        
         header_btns = QVBoxLayout()
         header_btns.setSpacing(6)
         
-        
+                                                                         
         self.index_vault_btn = QPushButton("Scan and Prepare Vault")
         self.index_vault_btn.setStyleSheet("background-color: #0284c7; color: white; padding: 7px; font-weight: bold; border-radius: 4px;")
         self.index_vault_btn.clicked.connect(self.start_indexing)
@@ -173,7 +173,7 @@ class ContextVaultApp(QMainWindow):
         sidebar_layout.addLayout(header_btns)
         sidebar_layout.addSpacing(16)
         
-        
+                                                     
         self.nav_list = QListWidget()
         self.nav_list.setStyleSheet("""
             QListWidget {
@@ -233,7 +233,7 @@ class ContextVaultApp(QMainWindow):
         self.app_context.active_vault_path = path
         self.app_context.active_subfolder = None
         
-        
+                                                            
         try:
             self.app_context.service_container.open_vault(path)
         except Exception as e:
@@ -245,7 +245,7 @@ class ContextVaultApp(QMainWindow):
         self.stacked_widget.setCurrentWidget(self.vault_ui_container)
         self.status_bar.show()
         
-        
+                                       
         self.nav_list.setCurrentRow(0)
         self.change_page(0)
 
@@ -298,7 +298,7 @@ class ContextVaultApp(QMainWindow):
         self.sidebar_vault_name.setText(name)
         self.sidebar_vault_path.setText(path_str)
         
-        
+                                   
         info = self.app_context.service_container.vault_service.get_vault_status(vault)
         f_count = info.get("file_count", 0)
         c_count = info.get("chunk_count", 0)
@@ -306,8 +306,8 @@ class ContextVaultApp(QMainWindow):
         self.sidebar_file_count.setText(f"{f_count} files (filesystem retrieval ready; {c_count} cached passages)")
         self.vault_info_label.setText(f"Vault: {name} ({f_count} files)")
         
-        
-        
+                                                                              
+                                                                   
         if self.app_context.service_container.has_llm:
             self.llm_status_label.setText("Artifact provider: Available")
             self.llm_status_label.setStyleSheet("color: #10b981;")

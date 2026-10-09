@@ -12,6 +12,10 @@ from rich.table import Table
 from rich.tree import Tree
 
 from contextvault.core.config import get_config
+from contextvault.query.errors import QueryError
+from contextvault.query.parser import parse_query
+from contextvault.retrieval.search_models import SearchRequest
+from contextvault.filesystem.plan_models import RouteEntry, RouteSpec, route_from_data
 from contextvault.services.service_container import ServiceContainer
 
 app = typer.Typer(
@@ -100,11 +104,75 @@ def _resolve_scope(vault, scope: str | None) -> str | None:
         raise typer.Exit(1)
 
 
+def _render_search_response(response, title: str) -> None:
+    for diagnostic in response.diagnostics:
+        console.print(f"[yellow]{diagnostic}[/yellow]")
+    if response.unknown_ids:
+        console.print(f"[yellow]{len(response.unknown_ids)} file(s) have unknown/incomplete query results.[/yellow]")
+    if not response.hits:
+        console.print("[yellow]No results found.[/yellow]")
+        return
+    table = Table(title=title)
+    table.add_column("ID", style="dim", max_width=12)
+    table.add_column("File", style="cyan")
+    table.add_column("Path", style="blue")
+    table.add_column("Snippet", style="white", max_width=60)
+    table.add_column("Score", style="yellow", justify="right")
+    table.add_column("Location", style="magenta")
+    for hit in response.hits:
+        passage = hit.passages[0] if hit.passages else None
+        snippet = passage.snippet if passage else ""
+        if len(snippet) > 100:
+            snippet = snippet[:100] + "..."
+        location = ""
+        if passage:
+            location = passage.heading or passage.section or ""
+            if passage.page is not None:
+                location = f"p. {passage.page}" + (f" · {location}" if location else "")
+            elif passage.line_start is not None:
+                location = f"lines {passage.line_start}-{passage.line_end}" + (f" · {location}" if location else "")
+        table.add_row(hit.file_id[:12], hit.filename, hit.relative_path, snippet, f"{hit.score:.3f}", location)
+    console.print(table)
+
+
+def _render_operation_plan(plan) -> None:
+    console.print(f"\nPlan ID: [cyan]{plan.plan_id}[/cyan]")
+    console.print(f"Plan digest: [dim]{plan.digest}[/dim]")
+    console.print(f"Files selected: [green]{len(plan.items)}[/green]")
+    console.print(f"Conflicts: [red]{len(plan.conflicts)}[/red]")
+    console.print(f"Skipped / review: [yellow]{len(plan.skips)}[/yellow]")
+    for item in plan.items:
+        console.print(f"  {item.action}: {item.source} -> {item.destination}")
+    for issue in plan.conflicts:
+        console.print(f"[red]Conflict: {issue.path or issue.file_id}: {issue.message}[/red]")
+    for issue in (*plan.skips, *plan.warnings):
+        console.print(f"[yellow]{issue.code}: {issue.path or ''} {issue.message}[/yellow]")
+
+
+def _preview_route(query: str, into: str, *, action: str, scope: str | None):
+    container, vault = _require_active_vault()
+    scope = _resolve_scope(vault, scope)
+    try:
+        rule = parse_query(query)
+        plan = container.plan_service.preview_route(RouteSpec(
+            entries=(RouteEntry(rule, into, action),), fallback="keep"
+        ), scope=scope)
+    except QueryError as exc:
+        console.print(Panel(exc.render(query), title="Invalid query"))
+        raise typer.Exit(2)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Route preview failed"))
+        raise typer.Exit(1)
+    _render_operation_plan(plan)
+    console.print("Dry run complete. No files changed. Commit with `cvault apply PLAN_ID`.")
+    return plan
+
+
                                                                   
 
 @app.command("open")
 def open_vault(path: str = typer.Argument(..., help="Path to the vault directory")):
-    """Open a folder as the active vault and run initial scan."""
+    """Open a folder as the active vault."""
     vault_path = Path(path).resolve()
     if not vault_path.exists() or not vault_path.is_dir():
         console.print(Panel(f"[red]Not a valid directory: {vault_path}[/red]", title="Error"))
@@ -118,32 +186,16 @@ def open_vault(path: str = typer.Argument(..., help="Path to the vault directory
             console.print(Panel(f"[red]Error: {e}[/red]", title="Error"))
             raise typer.Exit(1)
 
-                    
-    try:
-        files = container.vault_service.scan_vault(vault, container.vault_db)
-        _set_active_vault_path(vault_path)
-    except Exception as e:
-        console.print(f"[yellow]Scan warning: {e}[/yellow]")
-        files = []
-        _set_active_vault_path(vault_path)
-
-    supported_exts = {
-        ".txt", ".md", ".rst", ".log", ".py", ".java", ".c", ".cpp", ".h",
-        ".hpp", ".cs", ".rs", ".js", ".ts", ".html", ".css", ".json", ".yaml",
-        ".yml", ".toml", ".xml", ".sql", ".sh", ".ps1", ".pdf", ".docx",
-        ".pptx", ".csv", ".xlsx",
-    }
-    supported = sum(1 for f in files if f.extension.lower() in supported_exts)
-    unsupported = len(files) - supported
+    _set_active_vault_path(vault_path)
+    info = container.vault_service.get_vault_status(vault)
 
     table = Table(show_header=False, box=None)
     table.add_column("Key", style="cyan")
     table.add_column("Value", style="green")
     table.add_row("Active Vault", vault.display_name)
     table.add_row("Path", str(vault.root_path))
-    table.add_row("Files", str(len(files)))
-    table.add_row("Supported", str(supported))
-    table.add_row("Unsupported", str(unsupported))
+    table.add_row("Indexed files", str(info.get("file_count", 0)))
+    table.add_row("Index status", "Current index (run `cvault scan` to reconcile)")
     console.print(Panel(table, title="[green]Vault Opened Successfully[/green]", expand=False))
 
 
@@ -178,7 +230,6 @@ def status():
     """Show status of the active vault."""
     container, vault = _require_active_vault()
     info = container.vault_service.get_vault_status(vault)
-    config = container.config
 
     table = Table(show_header=False, box=None)
     table.add_column("Key", style="cyan")
@@ -188,9 +239,8 @@ def status():
     table.add_row("File Count", str(info.get("file_count", 0)))
     table.add_row("Chunk Count", str(info.get("chunk_count", 0)))
     table.add_row("Last Indexed", str(info.get("last_indexed_at", "Never")))
-    table.add_row("LLM", f"{config.ollama_model} @ {config.ollama_base_url}")
-    table.add_row("Retrieval", "Filesystem-native, directory-scoped evidence")
-    table.add_row("LLM Available", "Yes" if container.has_llm else "No (fallback mode)")
+    table.add_row("Retrieval", "SQLite FTS5/BM25 with deterministic rules")
+    table.add_row("Optional synthesis", "Provider availability checked only when requested")
     console.print(Panel(table, title="Vault Status", expand=False))
 
 
@@ -200,12 +250,15 @@ def scan():
     container, vault = _require_active_vault()
 
     with console.status("Scanning..."):
-        files = container.vault_service.scan_vault(vault, container.vault_db)
+        stats = container.index_service.reconcile()
+        files = container.vault_db.fetch_all(
+            "SELECT * FROM files WHERE vault_id=? ORDER BY relative_path", (vault.vault_id,)
+        )
 
                    
     type_counts: dict[str, int] = {}
     for f in files:
-        family = f.mime_family or "other"
+        family = f.get("mime_family") or "other"
         type_counts[family] = type_counts.get(family, 0) + 1
 
     table = Table(title=f"Scan Complete - {len(files)} files")
@@ -218,7 +271,7 @@ def scan():
 
 @app.command("index")
 def index():
-    """Run an optional parse/cache pass; retrieval does not require indexing."""
+    """Reconcile the content index and report extraction statistics."""
     container, vault = _require_active_vault()
 
     with Progress(
@@ -234,12 +287,7 @@ def index():
                 progress.update(task_id, completed=int(current / total * 100), description=msg or "Indexing...")
 
         try:
-            stats = container.vault_service.index_vault(
-                vault,
-                container.vault_db,
-                progress_callback=on_progress,
-                ocr_client=container.llm_client,
-            )
+            stats = container.index_service.reconcile(progress_callback=on_progress)
             progress.update(task_id, completed=100, description="Done!")
         except Exception as e:
             console.print(Panel(f"[red]Indexing failed: {e}[/red]", title="Error"))
@@ -257,19 +305,22 @@ def index():
 def ask(
     question: str = typer.Argument(..., help="Question to ask the vault"),
     scope: str | None = typer.Option(None, "--scope", help="Relative directory to use as the source of truth"),
+    synthesize: bool = typer.Option(False, "--synthesize", help="Generate an answer from deterministic retrieved evidence"),
 ):
-    """Ask a question answered using RAG from vault files."""
+    """Retrieve evidence by default; optionally generate a synthesized answer."""
     container, vault = _require_active_vault()
     scope = _resolve_scope(vault, scope)
 
     with console.status("Thinking..."):
         try:
-            response = container.rag_service.ask(question, vault.vault_id, subfolder=scope)
+            response = (container.rag_service.synthesize if synthesize else container.rag_service.ask)(
+                question, vault.vault_id, subfolder=scope
+            )
         except Exception as e:
             console.print(Panel(f"[red]{e}[/red]", title="Error"))
             raise typer.Exit(1)
 
-    console.print(Panel(response.answer, title="Answer", border_style="green"))
+    console.print(Panel(response.answer, title="Synthesized answer" if synthesize else "Retrieved evidence", border_style="green"))
 
     if response.sources:
         console.print("\n[bold]Sources:[/bold]")
@@ -281,34 +332,63 @@ def ask(
 
 @app.command("search")
 def search(
-    query: str = typer.Argument(..., help="Search query"),
+    query: str | None = typer.Argument(None, help="Plain-text search query"),
     scope: str | None = typer.Option(None, "--scope", help="Relative directory to search"),
+    where: str | None = typer.Option(None, "--where", help="Structured Boolean file rule"),
+    limit: int = typer.Option(20, "--limit", min=1, max=1000, help="Maximum ranked files to show"),
 ):
-    """Hybrid search across the vault."""
+    """Search indexed content or select files with a structured rule."""
     container, vault = _require_active_vault()
     scope = _resolve_scope(vault, scope)
+    if not query and not where:
+        console.print(Panel("Provide a search query or --where expression.", title="Error"))
+        raise typer.Exit(2)
+
+    try:
+        rule = parse_query(where) if where else None
+    except QueryError as e:
+        console.print(Panel(e.render(where or ""), title="Invalid query"))
+        raise typer.Exit(2)
 
     with console.status("Searching..."):
         try:
-            results = container.rag_service.search(query, vault.vault_id, subfolder=scope)
+            response = container.search_service.search(SearchRequest(
+                vault_id=vault.vault_id,
+                query=query,
+                rule=rule,
+                source_scope=scope,
+                limit=limit,
+            ))
         except Exception as e:
             console.print(Panel(f"[red]Search failed: {e}[/red]", title="Error"))
             raise typer.Exit(1)
 
-    if not results:
-        console.print("[yellow]No results found.[/yellow]")
-        return
+    title = f"Results for '{query}'" if query else "Files matching rule"
+    _render_search_response(response, title)
 
-    table = Table(title=f"Results for '{query}'")
-    table.add_column("File", style="cyan")
-    table.add_column("Path", style="blue")
-    table.add_column("Snippet", style="white", max_width=60)
-    table.add_column("Score", style="yellow", justify="right")
 
-    for r in results[:10]:
-        snippet = r.snippet[:100] + "..." if len(r.snippet) > 100 else r.snippet
-        table.add_row(r.filename, r.relative_path, snippet, f"{r.score:.2f}")
-    console.print(table)
+@app.command("query")
+def query_command(
+    expression: str = typer.Argument(..., help="Boolean rule expression, e.g. type:pdf AND content:\"vector database\""),
+    scope: str | None = typer.Option(None, "--scope", help="Relative directory to search"),
+    limit: int = typer.Option(20, "--limit", min=1, max=1000),
+):
+    """Select and rank files using the deterministic query language."""
+    container, vault = _require_active_vault()
+    scope = _resolve_scope(vault, scope)
+    try:
+        rule = parse_query(expression)
+    except QueryError as exc:
+        console.print(Panel(exc.render(expression), title="Invalid query"))
+        raise typer.Exit(2)
+    try:
+        response = container.search_service.search(SearchRequest(
+            vault_id=vault.vault_id, rule=rule, source_scope=scope, limit=limit
+        ))
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Query failed"))
+        raise typer.Exit(1)
+    _render_search_response(response, f"Files matching {expression}")
 
 
 @app.command("duplicates")
@@ -352,7 +432,7 @@ def organise(
     primary: str = typer.Option("file-type", help="Primary grouping"),
     secondary: str = typer.Option("none", help="Secondary grouping"),
     depth: int = typer.Option(2, help="Max hierarchy depth (1-4)"),
-    preview: bool = typer.Option(True, help="Show preview before applying"),
+    preview: bool = typer.Option(True, "--preview/--commit", help="Preview without changing files (default); --commit applies after review"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
     scope: str | None = typer.Option(None, "--scope", help="Relative directory to organise"),
 ):
@@ -376,28 +456,24 @@ def organise(
 
     with console.status("Generating organisation plan..."):
         try:
-            plan = container.organisation_service.preview(rules, subfolder=scope)
+            plan = container.organisation_service.preview_plan(rules, subfolder=scope)
         except Exception as e:
             console.print(Panel(f"[red]{e}[/red]", title="Error"))
             raise typer.Exit(1)
 
-                     
-    if plan.directories_to_create:
-        tree = Tree(f"[Folder] {vault.display_name}")
-        for d in plan.directories_to_create:
-            tree.add(f"[Folder] [cyan]{d}[/cyan] (new)")
-        console.print(tree)
+    _render_operation_plan(plan)
 
-    console.print(f"\nDirectories to create: [green]{len(plan.directories_to_create)}[/green]")
-    console.print(f"Files to move: [green]{len(plan.operations)}[/green]")
-    console.print(f"Files untouched: [yellow]{len(plan.untouched_files)}[/yellow]")
-    if plan.warnings:
-        for w in plan.warnings:
-            console.print(f"[yellow]! {w}[/yellow]")
-
-    if not plan.operations:
+    if not plan.items:
         console.print("[yellow]No operations to perform.[/yellow]")
         return
+
+    if preview:
+        console.print("[cyan]Dry run complete. No files changed. Commit this reviewed plan with `cvault apply PLAN_ID`.[/cyan]")
+        return
+
+    if plan.conflicts:
+        console.print("[red]Plan has conflicts. Resolve them and create a new preview before applying.[/red]")
+        raise typer.Exit(2)
 
     if not yes:
         if not typer.confirm("Apply this organisation plan?", default=False):
@@ -406,11 +482,156 @@ def organise(
 
     with console.status("Applying with hash verification..."):
         try:
-            records = container.organisation_service.apply(plan)
-            console.print(Panel(f"[green]Successfully applied {len(records)} operations with hash verification.[/green]"))
+            result = container.organisation_service.commit_plan(plan.plan_id, plan.digest, approved=True)
+            if result.status != "committed":
+                raise RuntimeError(f"Batch {result.batch_id} ended in {result.status}: {result.error or ''}")
+            console.print(Panel(f"[green]Successfully applied {len(result.completed)} operations. Batch: {result.batch_id}[/green]"))
         except Exception as e:
             console.print(Panel(f"[red]Apply failed: {e}[/red]", title="Error"))
             raise typer.Exit(1)
+
+
+@app.command("move")
+def move_command(
+    where: str = typer.Option(..., "--where", help="Structured rule selecting source files"),
+    into: str = typer.Option(..., "--into", help="Vault-relative destination directory"),
+    scope: str | None = typer.Option(None, "--scope", help="Source directory boundary"),
+):
+    """Preview a rule-selected move; commit later with `cvault apply PLAN_ID`."""
+    _preview_route(where, into, action="move", scope=scope)
+
+
+@app.command("copy")
+def copy_command(
+    where: str = typer.Option(..., "--where", help="Structured rule selecting source files"),
+    into: str = typer.Option(..., "--into", help="Vault-relative destination directory"),
+    scope: str | None = typer.Option(None, "--scope", help="Source directory boundary"),
+):
+    """Preview a rule-selected copy; commit later with `cvault apply PLAN_ID`."""
+    _preview_route(where, into, action="copy", scope=scope)
+
+
+@app.command("route")
+def route_command(
+    where: str | None = typer.Option(None, "--where", help="Rule for one ordered route entry"),
+    into: str | None = typer.Option(None, "--into", help="Destination for the --where rule"),
+    rules_file: Path | None = typer.Option(None, "--rules-file", exists=True, readable=True, help="JSON RouteSpec with ordered entries"),
+    fallback: str = typer.Option("review", help="Unmatched files: keep or review"),
+    group_by: str | None = typer.Option(None, "--group-by", help="Deterministic subfolder key"),
+    scope: str | None = typer.Option(None, "--scope", help="Source directory boundary"),
+):
+    """Preview ordered deterministic routes from a rule or RouteSpec JSON file."""
+    container, vault = _require_active_vault()
+    scope = _resolve_scope(vault, scope)
+    try:
+        if rules_file:
+            if where or into:
+                raise ValueError("Use either --rules-file or --where/--into, not both.")
+            route = route_from_data(json.loads(rules_file.read_text(encoding="utf-8")))
+        else:
+            if not where or not into:
+                raise ValueError("Provide both --where and --into, or use --rules-file.")
+            route = RouteSpec((RouteEntry(parse_query(where), into),), fallback=fallback, group_by=group_by)
+        plan = container.plan_service.preview_route(route, scope=scope)
+    except QueryError as exc:
+        source = where or str(rules_file or "")
+        console.print(Panel(exc.render(source), title="Invalid route rule"))
+        raise typer.Exit(2)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Route preview failed"))
+        raise typer.Exit(1)
+    _render_operation_plan(plan)
+    console.print("Dry run complete. No files changed. Commit with `cvault apply PLAN_ID`.")
+
+
+@app.command("rename")
+def rename_command(
+    source: str = typer.Argument(..., help="Vault-relative source path"),
+    new_name: str = typer.Argument(..., help="New basename only"),
+    scope: str | None = typer.Option(None, "--scope", help="Source directory boundary"),
+):
+    """Preview a safe rename, including case-only changes on Windows."""
+    container, vault = _require_active_vault()
+    scope = _resolve_scope(vault, scope)
+    try:
+        plan = container.plan_service.preview_rename(source, new_name, scope=scope)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Rename preview failed"))
+        raise typer.Exit(1)
+    _render_operation_plan(plan)
+    console.print("Dry run complete. No files changed. Commit with `cvault apply PLAN_ID`.")
+
+
+@app.command("apply")
+def apply_plan(
+    plan_id: str = typer.Argument(..., help="Persisted operation plan ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Commit the reviewed plan without another prompt"),
+):
+    """Review and explicitly commit an immutable persisted plan by ID."""
+    container, _vault = _require_active_vault()
+    try:
+        plan = container.plan_service.get_plan(plan_id)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Plan unavailable"))
+        raise typer.Exit(2)
+    _render_operation_plan(plan)
+    if plan.conflicts:
+        console.print("[red]Conflicts block commit. Create a corrected preview.[/red]")
+        raise typer.Exit(2)
+    if not plan.items:
+        console.print("[yellow]Plan has no operations.[/yellow]")
+        return
+    if not yes and not typer.confirm(f"Commit persisted plan {plan.plan_id}?", default=False):
+        console.print("Cancelled. No files changed.")
+        return
+    result = container.execution_service.commit(plan.plan_id, plan.digest, approved=True)
+    if result.status != "committed":
+        console.print(Panel(
+            f"Batch {result.batch_id} stopped in {result.status}: {result.error or ''}",
+            title="Recovery required",
+        ))
+        raise typer.Exit(3)
+    console.print(f"[green]Committed {len(result.completed)} operations. Batch: {result.batch_id}[/green]")
+
+
+tag_app = typer.Typer(no_args_is_help=True, help="Maintain deterministic per-file labels")
+app.add_typer(tag_app, name="tag")
+
+
+@tag_app.command("add")
+def add_tag(target: str = typer.Argument(..., help="File ID or vault-relative path"), tag: str = typer.Argument(...)):
+    """Add a label without changing the file bytes."""
+    container, _vault = _require_active_vault()
+    try:
+        tags = container.tag_service.add(target, tag)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Could not add tag"))
+        raise typer.Exit(1)
+    console.print(f"Tags: {', '.join(tags)}")
+
+
+@tag_app.command("remove")
+def remove_tag(target: str = typer.Argument(..., help="File ID or vault-relative path"), tag: str = typer.Argument(...)):
+    """Remove a label without changing the file bytes."""
+    container, _vault = _require_active_vault()
+    try:
+        tags = container.tag_service.remove(target, tag)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Could not remove tag"))
+        raise typer.Exit(1)
+    console.print(f"Tags: {', '.join(tags) if tags else '(none)'}")
+
+
+@tag_app.command("list")
+def list_tags(target: str = typer.Argument(..., help="File ID or vault-relative path")):
+    """List a file's stored labels."""
+    container, _vault = _require_active_vault()
+    try:
+        tags = container.tag_service.list(target)
+    except Exception as exc:
+        console.print(Panel(f"[red]{exc}[/red]", title="Could not list tags"))
+        raise typer.Exit(1)
+    console.print(", ".join(tags) if tags else "(no tags)")
 
 
 @app.command("peek")
@@ -528,29 +749,52 @@ def audit():
 
     if not ops:
         console.print("[yellow]No operations recorded yet.[/yellow]")
-        return
+    else:
+        table = Table(title="Audit Log")
+        table.add_column("Time", style="cyan")
+        table.add_column("Operation", style="magenta")
+        table.add_column("Source", style="blue")
+        table.add_column("Destination", style="green")
+        table.add_column("Status", style="yellow")
+        table.add_column("Provenance", style="dim")
 
-    table = Table(title="Audit Log")
-    table.add_column("Time", style="cyan")
-    table.add_column("Operation", style="magenta")
-    table.add_column("Source", style="blue")
-    table.add_column("Destination", style="green")
-    table.add_column("Status", style="yellow")
+        for op in ops[:20]:
+            table.add_row(
+                op.timestamp.strftime("%Y-%m-%d %H:%M"),
+                op.operation_type,
+                op.source_path,
+                op.destination_path or "-",
+                op.status,
+                "legacy / recheck hash before undo",
+            )
+        console.print(table)
 
-    for op in ops[:20]:
-        table.add_row(
-            op.timestamp.strftime("%Y-%m-%d %H:%M"),
-            op.operation_type,
-            op.source_path,
-            op.destination_path or "-",
-            op.status,
-        )
-    console.print(table)
+    try:
+        batches = container.audit_service.get_journal_history(vault)
+        if batches:
+            journal = Table(title="Reviewed Operation Plans")
+            journal.add_column("Batch", style="cyan")
+            journal.add_column("Status", style="yellow")
+            journal.add_column("Plan", style="blue")
+            journal.add_column("Files", style="green")
+            for batch in batches:
+                journal.add_row(batch["batch_id"], batch["status"], batch["plan_id"], str(len(batch["items"])))
+                for item, assessment in zip(batch["items"], batch["assessment"]):
+                    journal.add_row(
+                        f"  {item['item_id']}",
+                        f"{item['state']} / {assessment.classification}",
+                        f"{item['source_path']} → {item['destination_path']}",
+                        assessment.advice,
+                    )
+            console.print(journal)
+    except Exception as e:
+        console.print(f"[yellow]Could not load operation journal: {e}[/yellow]")
 
 
 @app.command("undo")
 def undo(
     operation_id: str = typer.Argument(None, help="Operation ID to undo (omit for last batch)"),
+    journal_item: str | None = typer.Option(None, "--journal-item", help="Journal item ID to safely reverse"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ):
     """Undo the last organisation batch or a specific operation."""
@@ -562,23 +806,65 @@ def undo(
             return
 
     try:
-        if operation_id:
+        if journal_item:
+            result = container.audit_service.undo_journal_item(journal_item, vault, approved=True)
+            console.print(f"[green]Undid journal item {journal_item} in batch {result['batch_id']}[/green]")
+        elif operation_id:
             result = container.audit_service.undo_operation(operation_id, vault)
             console.print(f"[green]Undid operation {operation_id}[/green]")
         else:
+            batches = container.audit_service.get_journal_history(vault, limit=100)
+            actionable = next((batch for batch in batches if batch["status"] == "committed" and
+                               any(item.get("undo_status") == "none" for item in batch["items"])), None)
+            if actionable:
+                latest = actionable
+                result = container.audit_service.undo_journal_batch(latest["batch_id"], vault, approved=True)
+                console.print(f"Journal batch {result['batch_id']}: {result['status']}")
+                for outcome in result["items"]:
+                    console.print(f"  {outcome.get('item_id')}: {outcome['status']} {outcome.get('reason', '')}")
+                return
             ops = container.audit_service.get_undoable_operations(vault.vault_id)
             if not ops:
                 console.print("[yellow]No undoable operations found.[/yellow]")
                 return
             last_batch = ops[0].batch_id
             if last_batch:
-                results = container.audit_service.undo_batch(last_batch, vault)
-                console.print(f"[green]Undid {len(results)} operations from last batch.[/green]")
+                report = container.audit_service.undo_batch_report(last_batch, vault)
+                console.print(f"Legacy batch {last_batch}: {report['status']} ({len(report['successes'])} reversed, {len(report['refused'])} refused).")
+                for refusal in report["refused"]:
+                    console.print(f"  {refusal['operation_id']}: {refusal['reason']}")
             else:
                 result = container.audit_service.undo_operation(ops[0].operation_id, vault)
                 console.print(f"[green]Undid last operation.[/green]")
     except Exception as e:
         console.print(Panel(f"[red]Undo failed: {e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command("recover")
+def recover(
+    batch_id: str = typer.Argument(..., help="Operation batch ID to inspect or recover"),
+    apply: bool = typer.Option(False, "--apply", help="Apply safe recovery actions after confirmation"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm recovery action"),
+):
+    """Inspect an interrupted batch; use --apply to retry/finalize safe items."""
+    container, vault = _require_active_vault()
+    try:
+        service = container.audit_service
+        assessments = service.inspect_journal_batch(batch_id, vault)
+        for item in assessments:
+            console.print(f"{item.item_id}: [bold]{item.classification}[/bold] — {item.advice}")
+        if not apply:
+            return
+        if not yes and not typer.confirm("Apply the safe recovery actions shown above?", default=False):
+            console.print("Cancelled.")
+            return
+        result = service.recover_journal_batch(batch_id, vault, approved=True)
+        console.print(f"Batch {result['batch_id']}: {result['status']}")
+        for item_id, status in result["items"]:
+            console.print(f"  {item_id}: {status}")
+    except Exception as e:
+        console.print(Panel(f"[red]{e}[/red]", title="Recovery error"))
         raise typer.Exit(1)
 
 

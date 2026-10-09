@@ -13,7 +13,7 @@ class WelcomePage(QWidget):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        
+                    
         title = QLabel("Context Vault")
         font = title.font()
         font.setPointSize(24)
@@ -22,14 +22,14 @@ class WelcomePage(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
-        
+                  
         subtitle = QLabel("Turn a folder into an intelligent knowledge workspace")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(subtitle)
         
         layout.addSpacing(20)
         
-        
+                              
         self.select_btn = QPushButton("Select Folder")
         self.select_btn.setMinimumWidth(200)
         self.select_btn.clicked.connect(self.select_folder)
@@ -37,7 +37,7 @@ class WelcomePage(QWidget):
         
         layout.addSpacing(30)
         
-        
+                       
         recent_label = QLabel("Recent Vaults:")
         layout.addWidget(recent_label)
         

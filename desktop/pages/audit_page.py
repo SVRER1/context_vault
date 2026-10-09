@@ -9,7 +9,7 @@ class AuditPage(QWidget):
         
         layout = QVBoxLayout(self)
         
-        
+                        
         btn_layout = QHBoxLayout()
         self.undo_btn = QPushButton("Undo Selected Operation")
         self.undo_btn.clicked.connect(self.undo_selected)
@@ -27,7 +27,7 @@ class AuditPage(QWidget):
         btn_layout.addWidget(self.refresh_btn)
         layout.addLayout(btn_layout)
         
-        
+               
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(["Time", "Operation", "Source", "Destination", "Status", "Undo / Recovery", "Journal ID"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
